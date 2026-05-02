@@ -12,6 +12,13 @@ import {
   renderInsightsReport
 } from "../lib/insights/report.ts";
 import { runInsightsCli } from "../lib/insights/cli.ts";
+import {
+  collectInsightsInput,
+  generateMetricsOnlyReport,
+  insightsPaths,
+  renderInsightsReport
+} from "../lib/insights/report.ts";
+import { runInsightsCli } from "../lib/insights/cli.ts";
 import { scanSessions } from "../lib/insights/scan.ts";
 import { buildSessionMeta } from "../lib/insights/meta.ts";
 import { readWireTurns } from "../lib/insights/wire.ts";
@@ -103,6 +110,7 @@ test("insights no-llm report is generated from Kimi sessions", () =>
       ]
     });
 
+    const report = await generateMetricsOnlyReport({ noLlm: true, env });
     const report = await generateMetricsOnlyReport({ noLlm: true, env });
 
     assert.equal(report.scannedSessions, 1);

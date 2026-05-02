@@ -1,10 +1,14 @@
 ---
 name: insights
 description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, or an insights report.
+description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, or an insights report.
 ---
 
 # OMK Insights
 
+Use the OMK collector, write the narrative sections as the current Kimi agent, then ask OMK to render the report.
+
+Do not manually inspect session logs unless the collector fails.
 Use the OMK collector, write the narrative sections as the current Kimi agent, then ask OMK to render the report.
 
 Do not manually inspect session logs unless the collector fails.
@@ -46,6 +50,9 @@ Do not manually inspect session logs unless the collector fails.
 
 ## Examples
 
+- `/skill:insights` -> `omk insights collect`
+- `/skill:insights --limit 50` -> `omk insights collect --limit 50`
+- `/skill:insights 少花点 token` -> `omk insights collect --facet-limit 10`
 - `/skill:insights` -> `omk insights collect`
 - `/skill:insights --limit 50` -> `omk insights collect --limit 50`
 - `/skill:insights 少花点 token` -> `omk insights collect --facet-limit 10`

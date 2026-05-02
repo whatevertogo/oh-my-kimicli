@@ -1,6 +1,8 @@
 export function generateHtmlReport(report) {
   const data = report.aggregated || {};
   const sections = report.sections || {};
+  const data = report.aggregated || {};
+  const sections = report.sections || {};
   return `<!doctype html>
 <html lang="${escapeHtml(htmlLang(data))}">
 <head>
@@ -17,12 +19,24 @@ export function generateHtmlReport(report) {
     h3 { margin: 14px 0 6px; font-size: 15px; letter-spacing: 0; }
     p { line-height: 1.58; margin: 7px 0; }
     code { background: #edf2f7; border: 1px solid #d9e2ec; border-radius: 5px; padding: 2px 5px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7fb; color: #18212f; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 20px 58px; }
+    h1 { margin: 0 0 6px; font-size: 34px; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 20px; letter-spacing: 0; }
+    h3 { margin: 14px 0 6px; font-size: 15px; letter-spacing: 0; }
+    p { line-height: 1.58; margin: 7px 0; }
+    code { background: #edf2f7; border: 1px solid #d9e2ec; border-radius: 5px; padding: 2px 5px; }
     .muted { color: #667085; }
+    .hero { margin-bottom: 20px; }
     .hero { margin-bottom: 20px; }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 22px 0; }
     .stat, section { background: white; border: 1px solid #d9dee7; border-radius: 8px; padding: 16px; }
     .stat strong { display: block; font-size: 24px; margin-top: 3px; }
+    .stat strong { display: block; font-size: 24px; margin-top: 3px; }
     section { margin-top: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .bar { display: grid; grid-template-columns: minmax(110px, 220px) 1fr 48px; gap: 10px; align-items: center; margin: 8px 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
     .bar { display: grid; grid-template-columns: minmax(110px, 220px) 1fr 48px; gap: 10px; align-items: center; margin: 8px 0; }
     .track { height: 12px; background: #e8edf3; border-radius: 999px; overflow: hidden; }
@@ -30,10 +44,17 @@ export function generateHtmlReport(report) {
     .list { padding-left: 20px; margin: 8px 0 0; }
     .item { border-top: 1px solid #edf0f5; padding-top: 10px; margin-top: 10px; }
     .copy { white-space: pre-wrap; word-break: break-word; background: #f8fafc; border: 1px solid #d9e2ec; border-radius: 6px; padding: 10px; margin-top: 8px; }
+    .list { padding-left: 20px; margin: 8px 0 0; }
+    .item { border-top: 1px solid #edf0f5; padding-top: 10px; margin-top: 10px; }
+    .copy { white-space: pre-wrap; word-break: break-word; background: #f8fafc; border: 1px solid #d9e2ec; border-radius: 6px; padding: 10px; margin-top: 8px; }
   </style>
 </head>
 <body>
 <main>
+  <div class="hero">
+    <h1>oh-my-kimicli insights</h1>
+    <div class="muted">Generated ${escapeHtml(report.generatedAt)} from ${escapeHtml(report.kimiShareDir)} (${escapeHtml(report.mode || "report")})</div>
+  </div>
   <div class="hero">
     <h1>oh-my-kimicli insights</h1>
     <div class="muted">Generated ${escapeHtml(report.generatedAt)} from ${escapeHtml(report.kimiShareDir)} (${escapeHtml(report.mode || "report")})</div>
@@ -48,7 +69,9 @@ export function generateHtmlReport(report) {
     ${stat("Language", data.userLanguage?.label || "unknown")}
   </div>
   ${atAGlance(sections.at_a_glance)}
+  ${atAGlance(sections.at_a_glance)}
   <div class="grid">
+    ${chartSection("Goals", data.goalCategories)}
     ${chartSection("Goals", data.goalCategories)}
     ${chartSection("Tools", data.toolCounts)}
     ${chartSection("Languages", data.languages)}
@@ -205,10 +228,25 @@ function chartSection(title, map) {
         .map(([key, value]) => {
           const count = Number(value) || 0;
           return `<div class="bar"><span>${escapeHtml(labelize(key))}</span><div class="track"><div class="fill" style="width:${Math.round((count / max) * 100)}%"></div></div><span>${escapeHtml(formatNumber(count))}</span></div>`;
+          return `<div class="bar"><span>${escapeHtml(labelize(key))}</span><div class="track"><div class="fill" style="width:${Math.round((count / max) * 100)}%"></div></div><span>${escapeHtml(formatNumber(count))}</span></div>`;
         })
         .join("")
     : `<div class="muted">No data</div>`;
   return `<section><h2>${escapeHtml(title)}</h2>${bars}</section>`;
+}
+
+function itemList(items, render) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  return list.length ? list.map((item) => `<div class="item">${render(item)}</div>`).join("") : `<p class="muted">No entries.</p>`;
+}
+
+function bulletList(items) {
+  const list = Array.isArray(items) ? items.filter(Boolean) : [];
+  return list.length ? `<ul class="list">${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+}
+
+function copyBlock(value) {
+  return value ? `<div class="copy">${escapeHtml(value)}</div>` : "";
 }
 
 function itemList(items, render) {
