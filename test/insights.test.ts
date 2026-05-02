@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import { insightsPaths, prepareInsightsEvidence, renderInsightsReport } from "..
 import { buildSessionMeta } from "../lib/insights/meta.ts";
 import { scanSessions } from "../lib/insights/scan.ts";
 import { readWireTurns } from "../lib/insights/wire.ts";
-import { doctor } from "../lib/setup.ts";
+import { doctor, setup } from "../lib/setup.ts";
 
 async function withTempHomes(fn) {
   const dir = mkdtempSync(join(tmpdir(), "omk-insights-"));
@@ -274,8 +274,64 @@ test("doctor detects stale installed insights skill", () =>
     assert.equal(result.skills.insights_stale, true);
   }));
 
+test("setup force skips same-name skills without an OMK marker", () =>
+  withTempHomes((dir, env) => {
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "user customized insights skill", "utf8");
+
+    setup({ force: true });
+
+    assert.equal(readFileSync(join(skillDir, "SKILL.md"), "utf8"), "user customized insights skill");
+    assert.equal(existsSync(join(env.KIMI_USER_SKILLS_DIR, ".omk-backups")), false);
+  }));
+
+test("setup force skips OMK-managed skills after user edits", () =>
+  withTempHomes((dir, env) => {
+    setup();
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+    writeFileSync(join(skillDir, "SKILL.md"), "user edited managed insights skill", "utf8");
+
+    setup({ force: true });
+
+    assert.equal(readFileSync(join(skillDir, "SKILL.md"), "utf8"), "user edited managed insights skill");
+    assert.equal(findBackedUpSkill(env, "insights"), "");
+  }));
+
+test("setup force backs up and replaces unmodified OMK-managed skills", () =>
+  withTempHomes((dir, env) => {
+    setup();
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+
+    setup({ force: true });
+
+    const backupText = findBackedUpSkill(env, "insights");
+    const currentText = readFileSync(join(skillDir, "SKILL.md"), "utf8");
+
+    assert.match(backupText, /omk insights prepare/);
+    assert.match(currentText, /omk insights prepare/);
+    assert.equal(existsSync(join(skillDir, ".omk-managed.json")), true);
+  }));
+
 async function helpText() {
   const lines = [];
   await runInsightsCli(["--help"], { stdout: (line) => lines.push(line) });
   return lines.join("\n");
+}
+
+function findBackedUpSkill(env, skillName) {
+  const backupRoot = join(env.KIMI_USER_SKILLS_DIR, ".omk-backups");
+  if (!existsSync(backupRoot)) {
+    return "";
+  }
+  for (const batch of readdirSync(backupRoot, { withFileTypes: true })) {
+    if (!batch.isDirectory()) {
+      continue;
+    }
+    const skillPath = join(backupRoot, batch.name, skillName, "SKILL.md");
+    if (existsSync(skillPath)) {
+      return readFileSync(skillPath, "utf8");
+    }
+  }
+  return "";
 }

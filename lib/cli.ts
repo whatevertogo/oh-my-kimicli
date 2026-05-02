@@ -2,6 +2,7 @@ import { runHook } from "./hook.ts";
 import { ensureConfig } from "./config.ts";
 import { doctor, formatDoctorSummary, setup, uninstall } from "./setup.ts";
 import { runInsightsCli } from "./insights/cli.ts";
+import { runUpdate } from "./update.ts";
 
 export async function main(args) {
   const [command = "help", ...rest] = args;
@@ -14,6 +15,9 @@ export async function main(args) {
     case "uninstall":
       uninstall();
       console.log("oh-my-kimicli hooks, plugin, and managed skills removed.");
+      return;
+    case "update":
+      runUpdate(rest);
       return;
     case "doctor":
       console.log(JSON.stringify(doctor(), null, 2));
@@ -42,6 +46,7 @@ function printHelp() {
 
 Usage:
   omk setup [--force]     Create ~/.omk state and install plugin, skills, and hooks
+  omk update              Reinstall latest GitHub version and refresh setup
   omk uninstall           Remove managed hooks, plugin, and managed skills
   omk config              Create or normalize ~/.omk/config.json
   omk doctor              Print machine-readable installation diagnostics

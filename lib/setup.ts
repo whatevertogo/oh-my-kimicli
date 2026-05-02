@@ -1,4 +1,7 @@
 import {
+  createHash
+} from "node:crypto";
+import {
   accessSync,
   constants,
   copyFileSync,
@@ -25,6 +28,7 @@ import { ensureConfig, readConfig } from "./config.ts";
 
 const HOOK_BLOCK_START = "# >>> oh-my-kimicli hooks >>>";
 const HOOK_BLOCK_END = "# <<< oh-my-kimicli hooks <<<";
+const SKILL_MARKER_FILE = ".omk-managed.json";
 
 export function setup({ force = false } = {}) {
   ensureConfig();
@@ -120,9 +124,75 @@ function installSkills(force) {
     if (existsSync(dest) && !force) {
       continue;
     }
+    if (existsSync(dest) && force) {
+      if (!canReplaceManagedSkill(dest, entry.name)) {
+        continue;
+      }
+      backupSkill(destRoot, entry.name);
+    }
     rmSync(dest, { recursive: true, force: true });
     cpSync(join(sourceRoot, entry.name), dest, { recursive: true });
+    writeSkillMarker(dest, entry.name);
   }
+}
+
+function canReplaceManagedSkill(skillDir, skillName) {
+  const markerPath = join(skillDir, SKILL_MARKER_FILE);
+  if (!existsSync(markerPath)) {
+    return false;
+  }
+  try {
+    const marker = JSON.parse(readFileSync(markerPath, "utf8"));
+    return marker.manager === "oh-my-kimicli" &&
+      marker.skill === skillName &&
+      marker.content_hash === skillContentHash(skillDir);
+  } catch {
+    return false;
+  }
+}
+
+function writeSkillMarker(skillDir, skillName) {
+  const marker = {
+    manager: "oh-my-kimicli",
+    skill: skillName,
+    content_hash: skillContentHash(skillDir),
+    updated_at: new Date().toISOString()
+  };
+  writeFileSync(join(skillDir, SKILL_MARKER_FILE), `${JSON.stringify(marker, null, 2)}\n`, "utf8");
+}
+
+function skillContentHash(skillDir) {
+  const hash = createHash("sha256");
+  for (const file of listSkillFiles(skillDir)) {
+    hash.update(file);
+    hash.update("\0");
+    hash.update(readFileSync(join(skillDir, file)));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function listSkillFiles(root, prefix = "") {
+  const files = [];
+  for (const entry of readdirSync(join(root, prefix), { withFileTypes: true })) {
+    const relative = prefix ? join(prefix, entry.name) : entry.name;
+    if (entry.name === SKILL_MARKER_FILE) {
+      continue;
+    }
+    if (entry.isDirectory()) {
+      files.push(...listSkillFiles(root, relative));
+    } else if (entry.isFile()) {
+      files.push(relative);
+    }
+  }
+  return files.sort();
+}
+
+function backupSkill(destRoot, skillName) {
+  const source = join(destRoot, skillName);
+  const backupRoot = join(destRoot, ".omk-backups", timestampForPath());
+  mkdirSync(backupRoot, { recursive: true });
+  cpSync(source, join(backupRoot, skillName), { recursive: true });
 }
 
 function mergeHooksBlock() {
@@ -162,13 +232,8 @@ function removeManagedSkills() {
     if (!entry.isDirectory()) {
       continue;
     }
-    const sourceSkill = join(sourceRoot, entry.name, "SKILL.md");
     const dest = join(destRoot, entry.name);
-    const destSkill = join(dest, "SKILL.md");
-    if (!existsSync(sourceSkill) || !existsSync(destSkill)) {
-      continue;
-    }
-    if (readFileSync(sourceSkill, "utf8") === readFileSync(destSkill, "utf8")) {
+    if (existsSync(dest) && canReplaceManagedSkill(dest, entry.name)) {
       rmSync(dest, { recursive: true, force: true });
     }
   }
@@ -229,6 +294,10 @@ function listInstalledSkills(skillsDir) {
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function timestampForPath() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
 function isWritableDir(dir) {

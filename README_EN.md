@@ -1,167 +1,164 @@
 # oh-my-kimicli
 
-External hook-first orchestration for Kimi Code CLI — skills, automated workflows, and usage insights for KimiCLI.
+An external enhancement layer for Kimi Code CLI. It installs skills, hooks, prompt templates, and the `omk` helper command so KimiCLI works better for long-running, reviewable, personal engineering workflows.
 
-## Philosophy
+oh-my-kimicli does not replace KimiCLI. It adds a maintainable workflow layer around KimiCLI's native capabilities:
 
-Everyone has their own oh-my-kimicli.
+- `/skill:insights` reviews your real session history and turns it into usage insights
+- `/skill:omk-ralph` plus hooks keep a task moving until it is done or clearly blocked
+- `/skill:ultrawork` organizes larger work into planning, execution, verification, and review
+- `/skill:omk-review` produces focused review artifacts before commit or PR
+- requirements and clarify skills reduce the cost of starting from unclear instructions
 
-The centerpiece of oh-my-kimicli is **insights** — it doesn't tell you how to work; it shows you how you actually work. By analyzing your KimiCLI session history, insights identifies your work patterns, reveals friction points in how you collaborate with AI, surfaces repeated instructions and improvement signals, and ultimately delivers recommendations that are specific to you and you alone.
+## Current Status
 
-The remaining skills (ultrawork, omk-ralph, omk-review, requirements-elicitation, clarify-first) orbit this center — each person selectively enables and tunes them based on their own actual usage patterns, rather than copying someone else's setup. Your oh-my-kimicli is defined by your data.
+- Install source: GitHub source install; not published to npm registry yet.
+- Runtime: Bun is required because the `omk` entrypoint runs TypeScript directly.
+- KimiCLI integration: writes skills to `~/.kimi/skills` and registers hooks in `~/.kimi/config.toml`.
+- Project-local state: Ralph and Ultrawork state lives under `./.omk/state/`.
+- User config: `~/.omk/config.json`.
 
 ## Installation
 
 ```sh
-bun install -g github:whatevertogo/oh-my-kimicli
+bun install -g github:whatevertogo/oh-my-kimicli#main
 omk setup
 ```
 
-> **Note:** This package is not yet published to npm. Use the GitHub URL above.
-> `bun install -g oh-my-kimicli` will return 404.
->
-> If your registry is configured with a mirror, switch back to the official registry first:
-> ```sh
-> npm config set registry https://registry.npmjs.org/
-> ```
+Do not use:
 
-After upgrading the package, run `omk setup --force` to refresh managed skill files.
-Plain `omk setup` preserves existing skill directories.
+```sh
+bun install -g oh-my-kimicli
+```
 
-The CLI entrypoint is TypeScript with a Bun shebang — Bun must be on `PATH`.
+The package is not published to npm yet, so npm registries or mirrors will return 404.
 
-## Skills
+After installation, check the install:
 
-oh-my-kimicli installs 6 skills into KimiCLI, invoked via `/skill:<name>` in conversation.
+```sh
+omk doctor
+```
 
-### `/skill:ultrawork` — Autonomous High-Throughput Execution
+## Updating
 
-A fully autonomous execution engine for complex tasks. Describe the goal; Ultrawork decides the strategy and keeps working until done.
+Recommended:
 
-- Uses omk-ralph state persistence for cross-turn automatic continuation
-- Splits work into shards, delegates to subagents, integrates results
-- Runs omk-review as a final quality gate before marking complete
-- Ideal for multi-file changes, debugging, refactoring, code review, and complex implementation
-- **Triggers:** `ulw`, `ultrawork`, `keep going`, `finish it`, `complete this`
+```sh
+omk update
+```
 
-### `/skill:omk-ralph` — Persistent Continuation Loop
+`omk update` uses the stable update path that worked around Bun's GitHub global package caching:
 
-Keeps KimiCLI working until the task is complete, bypassing the normal Stop behavior via a project-local state file.
+```sh
+bun remove -g oh-my-kimicli
+bun install -g github:whatevertogo/oh-my-kimicli#main
+omk setup --force
+```
 
-- State file at `./.omk/state/ralph-state.json` tracks task, progress, and evidence
-- `active` status triggers the Stop hook to inject continuation prompts automatically
-- `done` status injects a one-time summary prompt, then allows normal stop
-- `blocked` status pauses when user input is required
-- `max_iterations: -1` for unlimited continuation; set a positive integer to cap turns
-- **Triggers:** `/skill:omk-ralph <task>`, `keep going until done`
+`setup --force` only touches same-name managed skills that have an explicit OMK marker and have not been modified by the user. It does not overwrite unrelated user skills, and it does not overwrite managed skills you edited. For managed skills that are allowed to be replaced, the previous directory is backed up first:
 
-### `/skill:omk-review` — Multi-Perspective Code Review
+```text
+~/.kimi/skills/.omk-backups/<timestamp>/
+```
 
-Focused code review covering security, correctness, tests, and architecture before commit or PR.
+Why not just run `bun install -g github:whatevertogo/oh-my-kimicli`?
 
-- Auto-resolves review target: user-specified > staged diff > working-tree diff > branch diff
-- **Security:** injection paths, hardcoded secrets, auth bypass, unsafe deserialization
-- **Correctness:** logic errors, crash paths, async/null/error handling, resource leaks
-- **Tests:** uncovered branches, broken tests, trivial assertions
-- **Architecture:** cross-layer inconsistencies, unpropagated interface changes, public API changes
-- Reports only confidence-filtered real issues; separates new issues from pre-existing and low-confidence observations
-- Output written to `./.omk/CODE_REVIEW_ISSUES.md`
-- **Triggers:** `review`, `code review`, before committing
+Bun can keep an old resolved GitHub commit for a global package. The command may appear to finish while `bun pm ls -g` still points at an old hash. `omk update` removes the old global package first, reinstalls from `#main`, and refreshes managed skills/hooks.
 
-### `/skill:insights` — Usage Analysis & Recommendations
+On Windows, `omk update` schedules the update after the current `omk.exe` process exits. This avoids deleting the executable while it is still running. The update log is written to:
 
-Generates usage insights reports from KimiCLI session history, analyzing work patterns, friction points, and suggesting improvements.
+```text
+~/.omk/update.log
+```
 
-- `omk insights prepare` generates a Claude Code style evidence pack
-- The current agent writes `insights-content.json` from the evidence pack
-- `omk insights render` renders the result as HTML + JSON reports
-- Analysis dimensions: workflow signals, time-of-day patterns, friction details, repeated instructions, feature usage context
-- Produces concrete, actionable recommendations — not just summary statistics
-- There is no quick stats page; narrative content must come from the current Kimi agent analyzing the evidence pack
-- **Triggers:** `/skill:insights`, `usage insights`, `session analysis`, `friction analysis`
+Options:
 
-### `/skill:requirements-elicitation` — Pre-Execution Requirements Clarification
+```sh
+omk update --dry-run                 # print the planned commands only
+omk update --target github:owner/repo#branch
+omk update --no-setup                # update the global package without refreshing KimiCLI files
+```
 
-Clarifies goals, scope, constraints, and acceptance criteria before building — prevents building the wrong thing.
+If your installed version does not have `omk update` yet, run the manual update once:
 
-- **Light mode:** cheap-to-fix tasks — quick confirmation then go
-- **Standard mode:** wrong details cause partial rework — one compact batch of questions
-- **Deep mode:** wrong direction wastes significant work — rounds of questions, outputs a requirements doc
-- Covers six checkpoints: goal, user/audience, must-have scope, constraints, out-of-scope, done criteria
-- Only asks what affects the result; never asks what can be inferred from the repo
-- **Triggers:** under-specified requests like `build me an X`, `plan X`, `develop X`
-
-### `/skill:clarify-first` — In-Execution Decision Confirmation
-
-Resolves high-impact implementation decisions during active work. Division of labor with requirements-elicitation:
-
-| requirements-elicitation | clarify-first |
-|---|---|
-| Before work starts, goal/scope unclear | During work, specific implementation choice unclear |
-| "What are we building?" | "How should this detail be handled?" |
-
-- Only asks when all three conditions hold: concrete decision + multiple reasonable options + affects behavior/data/compatibility/cost/security
-- Provides a recommended option with reasoning
-- Subagents return ambiguity and recommended defaults to the parent agent instead of asking the user directly
-- **Triggers:** execution-time uncertainty, `clarify-first <decision>`
+```sh
+bun remove -g oh-my-kimicli
+bun install -g github:whatevertogo/oh-my-kimicli#main
+omk setup --force
+```
 
 ## Commands
 
 ```sh
-omk setup              # Install plugin, skills, and hooks
-omk setup --force      # Force-refresh all managed skills
+omk setup              # Install plugin, skills, prompts, and hooks
+omk setup --force      # Back up then refresh same-name managed skills
+omk update             # Reinstall latest GitHub main and refresh setup
 omk uninstall          # Remove managed hooks, plugin, and skills
 omk config             # Create or normalize ~/.omk/config.json
 omk doctor             # Print machine-readable installation diagnostics
-omk insights           # Alias for omk insights prepare
-omk insights prepare   # Generate evidence pack for /skill:insights
-omk insights render    # Render a narrative report from insights-content.json
+omk insights prepare   # Generate the evidence pack used by /skill:insights
+omk insights render    # Render HTML/JSON from insights-content.json
 omk insights paths     # Print insights artifact paths
-omk help               # Show this help
+omk help               # Show help
 ```
 
-`omk hook` is the internal hook entrypoint registered by `omk setup` and is not part of the public help surface.
+`omk hook` is an internal hook entrypoint registered by `omk setup`; it is not part of the public command surface.
 
-## Global Config
+## Skills
 
-oh-my-kimicli reads user-level defaults from `~/.omk/config.json`:
+`omk setup` installs 6 skills into `~/.kimi/skills`. Invoke them inside KimiCLI with `/skill:<name>`.
 
-```json
-{
-  "version": 1,
-  "features": {
-    "pet": false
-  }
-}
-```
+### `/skill:insights` — Usage Insights Report
 
-`features.pet` is disabled by default, reserved for future pet integration. Set `OMK_HOME` to override the `~/.omk` directory for testing or isolated installs.
-
-## Hook System
-
-`omk setup` registers six hook events in KimiCLI's `config.toml`: `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, and `StopFailure`.
-
-- **UserPromptSubmit:** initializes Ralph state for `/skill:omk-ralph`
-- **Stop:** blocks completion and injects continuation prompts while Ralph state is `active`
-- **Plan mode prompts:** `EnterPlanMode` prompts are injected only after `plan_mode=true` is detected in session state; `ExitPlanMode` is not hooked — plan review completes inside plan mode
-
-## Plan Mode Prompts
-
-Editable prompt files for shaping plan mode behavior:
+Generates a personal usage report from KimiCLI session history. It is not a quick stats page; it is a Claude Code style two-stage pipeline:
 
 ```text
-prompts/plan/enter-plan-mode-next-turn.md  # injected after native plan mode is active
-prompts/plan/plan-template.md              # expanded into the enter prompt
-prompts/plan/plan-mode-reentry.md          # reference prompt; not injected by default
+/skill:insights
+  -> omk insights prepare
+  -> current Kimi agent reads evidence-pack.md
+  -> current Kimi agent writes insights-content.json
+  -> omk insights render
+  -> report.html / report.json
 ```
 
-HTML comments are stripped before injection. The enter prompt preserves KimiCLI native plan mode behavior while adding a subagent plan-audit gate before `ExitPlanMode`.
+Artifacts:
 
-## Ralph Loop
+```text
+~/.omk/usage-data/insights/
+├── evidence-pack.md
+├── evidence-pack.json
+├── insights-content.schema.json
+├── insights-content.json
+├── report.html
+└── report.json
+```
 
-oh-my-kimicli implements Ralph continuation via the Stop hook and a project-local state file, without depending on KimiCLI's native Ralph mode.
+The report focuses on:
 
-**State file:** `./.omk/state/ralph-state.json`
+- projects and task types you work on most
+- effective collaboration patterns with KimiCLI
+- friction such as tool failures, repeated corrections, and interrupted tasks
+- repeated user preferences and instructions
+- workflows worth turning into a skill, hook, or AGENTS.md rule
+
+Boundaries:
+
+- does not start nested `kimi --print`
+- does not make the external CLI call a model directly
+- does not keep a quick stats page
+- narrative content must come from the evidence pack and the current Kimi agent's analysis
+
+### `/skill:omk-ralph` — Persistent Continuation Loop
+
+Keeps KimiCLI working until the task is complete, clearly blocked, or reaches a configured iteration cap.
+
+State file:
+
+```text
+./.omk/state/ralph-state.json
+```
+
+Basic state:
 
 ```json
 {
@@ -174,36 +171,191 @@ oh-my-kimicli implements Ralph continuation via the Stop hook and a project-loca
 }
 ```
 
-**Workflow:**
-1. `/skill:omk-ralph <task>` initializes state to `active`
-2. Stop hook detects `active` status, injects `prompts/ralph/continue.md` with the original task and current evidence
-3. On completion, set status to `done` — the hook injects `prompts/ralph/end.md` for a final summary
-4. When blocked, set status to `blocked` — the hook allows normal stop
+Behavior:
+
+- `active`: the Stop hook blocks stopping and injects `prompts/ralph/continue.md`
+- `done`: the Stop hook injects `prompts/ralph/end.md` once for final summary, then allows stop
+- `blocked`: the hook allows stop because user input, credentials, approval, or a destructive action is required
+
+This Ralph loop is implemented by oh-my-kimicli hooks and state files. It does not depend on KimiCLI's native Ralph mode.
+
+### `/skill:ultrawork` — Large-Task Autonomous Execution
+
+For multi-step, cross-file tasks that need verification. Ultrawork asks the agent to use stricter execution discipline:
+
+- use KimiCLI native plan mode for large tasks
+- select the skills needed for the current task instead of applying every skill blindly
+- activate OMK Ralph state so work does not stop early
+- keep evidence while executing
+- run meaningful verification before finishing
+- use `omk-review` as a final quality gate
+
+Good fit:
+
+- multi-file feature work
+- systematic bug fixing
+- complex refactors
+- long code reviews
+- "keep going until this is done" tasks
+
+### `/skill:omk-review` — Focused Code Review
+
+Writes a review artifact to:
+
+```text
+./.omk/CODE_REVIEW_ISSUES.md
+```
+
+Review target priority:
+
+```text
+user-specified scope > staged diff > working-tree diff > branch diff
+```
+
+Four perspectives:
+
+- Security: exploitable injection, secrets, auth bypass, unsafe deserialization
+- Code Quality: wrong output, crashes, or misleading behavior
+- Tests: missing coverage for changed behavior, broken tests, trivial assertions
+- Architecture: cross-layer mismatches, unpropagated type/interface changes, public API omissions
+
+It tries to avoid noisy advice by reporting only issues it can defend, and separates new issues from pre-existing and low-confidence observations.
+
+### `/skill:requirements-elicitation` — Pre-Execution Requirements Clarification
+
+Use when the user's goal, scope, constraints, or acceptance criteria are unclear. It handles "what are we building?"
+
+Modes:
+
+- Light: cheap-to-fix tasks; confirm understanding quickly
+- Standard: wrong details cause partial rework; ask one compact batch of questions
+- Deep: wrong direction wastes significant work; ask in rounds and produce a requirements document
+
+Principles:
+
+- ask only questions that affect the result
+- do not ask what can be inferred from the repo or context
+- if the user says "just do it" or "you decide", stop asking and proceed with explicit assumptions
+
+### `/skill:clarify-first` — In-Execution Decision Confirmation
+
+Use when a high-impact implementation choice appears during execution. It handles "how should this detail be done?"
+
+Trigger conditions:
+
+- there is a concrete implementation decision
+- at least two reasonable options exist
+- the choice affects behavior, data, compatibility, cost, or safety
+
+It should recommend a default with reasoning instead of pushing every small choice back to the user.
+
+## Hook System
+
+`omk setup` registers these hook events in KimiCLI's `config.toml`:
+
+- `UserPromptSubmit`
+- `PreToolUse`
+- `PostToolUse`
+- `Stop`
+- `SubagentStop`
+- `StopFailure`
+
+Current responsibilities:
+
+- initialize and continue Ralph state
+- enforce Ultrawork/Ralph stop gates
+- inject next-turn plan-mode prompts
+- defensively block dangerous shell commands
+- maintain workflow state and event logs
+
+## Plan Mode Prompts
+
+Editable files:
+
+```text
+prompts/plan/enter-plan-mode-next-turn.md
+prompts/plan/plan-template.md
+prompts/plan/plan-mode-reentry.md
+```
+
+Current policy:
+
+- preserve KimiCLI native plan mode
+- inject the next-turn prompt only after `plan_mode=true` is detected
+- do not hook `ExitPlanMode`
+- remind the agent to review the plan inside plan mode, through a subagent or self-review when appropriate
+
+## Configuration
+
+User config:
+
+```text
+~/.omk/config.json
+```
+
+Default:
+
+```json
+{
+  "version": 1,
+  "features": {
+    "pet": false
+  }
+}
+```
+
+`features.pet` is currently disabled by default and reserved for future use. Use `OMK_HOME` to move `~/.omk` for tests or isolated installs.
+
+## Uninstalling
+
+```sh
+omk uninstall
+```
+
+This removes oh-my-kimicli managed hooks, plugin files, and skills. It does not delete `~/.omk/usage-data` or project-local `./.omk` state directories.
+
+To remove the global CLI:
+
+```sh
+bun remove -g oh-my-kimicli
+```
 
 ## Local Development
 
-Build release artifacts from the repository root:
-
 ```sh
+bun install
+bun test
+bun run check
 bun run pack:all
 ```
 
-Artifacts:
-```text
-dist/npm/oh-my-kimicli-0.1.0.tgz  # npm-generated package
-dist/bun/oh-my-kimicli-0.1.0.tgz  # Bun-generated package
-dist/bundle/omk.js                # Bun bundle smoke artifact
-```
-
-Local development install:
+Local link:
 
 ```sh
 bun link
-omk setup
+omk setup --force
 ```
 
-The package intentionally ships TypeScript sources plus `skills/`, `prompts/`, and `plugin/` directories — `omk setup` needs those package resources on disk to install managed KimiCLI skills, prompts, hooks, and plugin files.
+Artifacts:
 
-## Notes
+```text
+dist/npm/oh-my-kimicli-0.1.0.tgz
+dist/bun/oh-my-kimicli-0.1.0.tgz
+dist/bundle/omk.js
+```
 
-KimiCLI uses `KIMI_SHARE_DIR` for global data (config, plugins, logs, sessions, MCP). User skills are currently discovered from `~/.kimi/skills`, so this installer writes skills there even when `KIMI_SHARE_DIR` is set.
+The package intentionally ships TypeScript sources plus `skills/`, `prompts/`, and `plugin/` directories because `omk setup` needs those resources to install managed KimiCLI files.
+
+## Path Reference
+
+```text
+~/.kimi/skills/                         # KimiCLI user skills
+~/.kimi/plugins/oh-my-kimicli/          # installed plugin directory
+~/.kimi/config.toml                     # hook registration target
+~/.omk/config.json                      # OMK user config
+~/.omk/usage-data/insights/             # insights report artifacts
+./.omk/state/ralph-state.json           # project-local Ralph state
+./.omk/CODE_REVIEW_ISSUES.md            # omk-review report
+```
+
+KimiCLI currently discovers user skills from `~/.kimi/skills`, so oh-my-kimicli writes managed skills there even when `KIMI_SHARE_DIR` is set.
