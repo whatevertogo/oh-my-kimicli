@@ -1,4 +1,4 @@
-export const INSIGHTS_SCHEMA_VERSION = 1;
+export const INSIGHTS_SCHEMA_VERSION = 2;
 
 export type LiteSession = {
   sessionId: string;
@@ -141,7 +141,6 @@ export type AggregatedData = {
 };
 
 export type InsightSections = {
-  schema_version: 1;
   at_a_glance: {
     whats_working: string;
     whats_hindering: string;
@@ -182,16 +181,17 @@ export type InsightSections = {
       copyable_prompt: string;
     }>;
   };
-  skill_opportunities: Array<{
-    name: string;
-    trigger: string;
-    why: string;
-    evidence: string[];
-    proposed_scope: string;
-    risk: string;
-    example_prompt: string;
-    recommended_action: "create_skill" | "update_skill" | "add_hook" | "add_agents_instruction" | "no_action";
-  }>;
+  skill_opportunities: {
+    candidates: Array<{
+      name: string;
+      trigger: string;
+      why: string;
+      evidence_sessions: string[];
+      expected_behavior: string;
+      starter_prompt: string;
+      recommended_action: "create_skill" | "update_skill" | "add_hook" | "add_agents_instruction" | "no_action";
+    }>;
+  };
   on_the_horizon: {
     intro: string;
     opportunities: Array<{
@@ -201,29 +201,36 @@ export type InsightSections = {
       copyable_prompt: string;
     }>;
   };
-  fun_ending: {
-    headline: string;
-    detail: string;
-  };
 };
 
 export type InsightsOptions = {
   force?: boolean;
   limit?: number;
   facetLimit?: number;
-  noLlm?: boolean;
-  json?: boolean;
   env?: NodeJS.ProcessEnv;
 };
 
 export type InsightsReport = {
+  schema_version: 2;
   generatedAt: string;
   source: "oh-my-kimicli";
+  mode: "narrative";
+  language: string;
   kimiShareDir: string;
   reportHtmlPath: string;
   reportJsonPath: string;
   scannedSessions: number;
   analyzedSessions: number;
+  metrics: AggregatedData;
   aggregated: AggregatedData;
+  facets_summary: {
+    total: number;
+    goal_categories: Record<string, number>;
+    outcomes: Record<string, number>;
+    satisfaction: Record<string, number>;
+    friction: Record<string, number>;
+  };
+  facets: unknown[];
   sections: InsightSections;
+  quality: Record<string, unknown>;
 };

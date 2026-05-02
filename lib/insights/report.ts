@@ -47,7 +47,6 @@ export async function prepareInsightsEvidence(options = {}) {
     env,
     paths,
     scannedSessions: liteSessions.length,
-    metas,
     sessionInputs,
     aggregated,
     options
