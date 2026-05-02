@@ -1,11 +1,11 @@
 {
-  "name": "oh-my-kimicli",
+  "name": "@whatevertogo/oh-my-kimicli",
   "version": "0.1.0",
   "description": "Personal workflow orchestration for Kimi Code CLI: skills, hooks, persistent continuation, review gates, and usage insights.",
   "type": "module",
   "bin": {
-    "omk": "./bin/omk.js",
-    "oh-my-kimicli": "./bin/omk.js"
+    "omk": "bin/omk.js",
+    "oh-my-kimicli": "bin/omk.js"
   },
   "repository": {
     "type": "git",

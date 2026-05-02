@@ -3,14 +3,15 @@ import { test } from "bun:test";
 
 import { parseUpdateArgs, runUpdate } from "../lib/update.ts";
 
-test("update defaults to reinstalling github main and refreshing setup", () => {
+test("update defaults to reinstalling the scoped npm package and refreshing setup", () => {
   const lines = [];
   const result = runUpdate(["--dry-run"], { stdout: (line) => lines.push(line) });
 
   assert.equal(result.scheduled, false);
   assert.deepEqual(result.plan.commands, [
     ["bun", "remove", "-g", "oh-my-kimicli"],
-    ["bun", "install", "-g", "github:whatevertogo/oh-my-kimicli#main"],
+    ["bun", "remove", "-g", "@whatevertogo/oh-my-kimicli"],
+    ["bun", "install", "-g", "@whatevertogo/oh-my-kimicli@latest"],
     ["omk", "setup", "--force"]
   ]);
   assert.match(lines.join("\n"), /bun remove -g oh-my-kimicli/);

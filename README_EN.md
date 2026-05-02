@@ -12,7 +12,9 @@ oh-my-kimicli does not replace KimiCLI. It adds a maintainable workflow layer ar
 
 ## Current Status
 
-- Install source: GitHub source install; not published to npm registry yet.
+- Published package: `@whatevertogo/oh-my-kimicli`.
+- npm page: <https://www.npmjs.com/package/@whatevertogo/oh-my-kimicli>
+- Install source: npm is recommended; GitHub source install is only a development fallback.
 - Runtime: Bun is required because the `omk` entrypoint runs TypeScript directly.
 - KimiCLI integration: writes skills to `~/.kimi/skills` and registers hooks in `~/.kimi/config.toml`.
 - Project-local state: Ralph and Ultrawork state lives under `./.omk/state/`.
@@ -21,7 +23,7 @@ oh-my-kimicli does not replace KimiCLI. It adds a maintainable workflow layer ar
 ## Installation
 
 ```sh
-bun install -g github:whatevertogo/oh-my-kimicli#main
+bun install -g @whatevertogo/oh-my-kimicli
 omk setup
 ```
 
@@ -31,12 +33,19 @@ Do not use:
 bun install -g oh-my-kimicli
 ```
 
-The package is not published to npm yet, so npm registries or mirrors will return 404.
+The unscoped `oh-my-kimicli` name is blocked by npm package-name similarity protection; use the scoped package name.
 
 After installation, check the install:
 
 ```sh
 omk doctor
+```
+
+For a development build, install from GitHub:
+
+```sh
+bun install -g github:whatevertogo/oh-my-kimicli
+omk setup
 ```
 
 ## Updating
@@ -47,11 +56,12 @@ Recommended:
 omk update
 ```
 
-`omk update` uses the stable update path that worked around Bun's GitHub global package caching:
+`omk update` uses the stable update path that worked around Bun's global package caching:
 
 ```sh
 bun remove -g oh-my-kimicli
-bun install -g github:whatevertogo/oh-my-kimicli#main
+bun remove -g @whatevertogo/oh-my-kimicli
+bun install -g @whatevertogo/oh-my-kimicli
 omk setup --force
 ```
 
@@ -61,9 +71,9 @@ omk setup --force
 ~/.kimi/skills/.omk-backups/<timestamp>/
 ```
 
-Why not just run `bun install -g github:whatevertogo/oh-my-kimicli`?
+Why not just run `bun install -g @whatevertogo/oh-my-kimicli`?
 
-Bun can keep an old resolved GitHub commit for a global package. The command may appear to finish while `bun pm ls -g` still points at an old hash. `omk update` removes the old global package first, reinstalls from `#main`, and refreshes managed skills/hooks.
+Bun can keep an old resolved package source for a global package. The command may appear to finish while `bun pm ls -g` still points at an old version or source. `omk update` removes the old global package first, reinstalls from npm latest, and refreshes managed skills/hooks.
 
 On Windows, `omk update` schedules the update after the current `omk.exe` process exits. This avoids deleting the executable while it is still running. The update log is written to:
 
@@ -83,7 +93,8 @@ If your installed version does not have `omk update` yet, run the manual update 
 
 ```sh
 bun remove -g oh-my-kimicli
-bun install -g github:whatevertogo/oh-my-kimicli#main
+bun remove -g @whatevertogo/oh-my-kimicli
+bun install -g @whatevertogo/oh-my-kimicli
 omk setup --force
 ```
 
@@ -92,7 +103,7 @@ omk setup --force
 ```sh
 omk setup              # Install plugin, skills, prompts, and hooks
 omk setup --force      # Back up then refresh same-name managed skills
-omk update             # Reinstall latest GitHub main and refresh setup
+omk update             # Reinstall npm latest and refresh setup
 omk uninstall          # Remove managed hooks, plugin, and skills
 omk config             # Create or normalize ~/.omk/config.json
 omk doctor             # Print machine-readable installation diagnostics
@@ -318,6 +329,7 @@ To remove the global CLI:
 
 ```sh
 bun remove -g oh-my-kimicli
+bun remove -g @whatevertogo/oh-my-kimicli
 ```
 
 ## Local Development
@@ -339,8 +351,8 @@ omk setup --force
 Artifacts:
 
 ```text
-dist/npm/oh-my-kimicli-0.1.0.tgz
-dist/bun/oh-my-kimicli-0.1.0.tgz
+dist/npm/whatevertogo-oh-my-kimicli-0.1.0.tgz
+dist/bun/whatevertogo-oh-my-kimicli-0.1.0.tgz
 dist/bundle/omk.js
 ```
 

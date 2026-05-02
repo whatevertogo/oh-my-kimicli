@@ -2,7 +2,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { omkHomeDir } from "./paths.ts";
 
-const DEFAULT_TARGET = "github:whatevertogo/oh-my-kimicli#main";
+const PACKAGE_NAME = "@whatevertogo/oh-my-kimicli";
+const LEGACY_PACKAGE_NAME = "oh-my-kimicli";
+const DEFAULT_TARGET = `${PACKAGE_NAME}@latest`;
 
 export function runUpdate(args = [], { env = process.env, stdout = console.log } = {}) {
   const options = parseUpdateArgs(args);
@@ -58,7 +60,8 @@ export function parseUpdateArgs(args = []) {
 
 function updatePlan(options) {
   const commands = [
-    ["bun", "remove", "-g", "oh-my-kimicli"],
+    ["bun", "remove", "-g", LEGACY_PACKAGE_NAME],
+    ["bun", "remove", "-g", PACKAGE_NAME],
     ["bun", "install", "-g", options.target]
   ];
   if (options.setup) {
