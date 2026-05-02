@@ -5,9 +5,7 @@ description: Autonomous high-throughput execution for complex tasks. Trigger whe
 
 # Ultrawork
 
-Rule: the user says what; Ultrawork decides how and keeps going. Constant asking defeats
-the purpose — the user chose Ultrawork to delegate decisions, not to be interrupted for
-every one of them.
+Rule: the user says what; Ultrawork decides how and keeps going.
 
 Ultrawork is a coordinator, not a fixed list of OMK-only abilities. Use the current session's
 available Kimi skills, native tools, project skills, user skills, and plugin skills as the source of
@@ -24,8 +22,7 @@ Keep `completion_promise` as `OMK_RALPH_DONE` unless the user provides a clearer
 
 ## Start
 
-1. State `ULTRAWORK MODE ENABLED` when responding directly — sets the user's expectation
-   that autonomous, no-hand-holding mode is active.
+1. State `ULTRAWORK MODE ENABLED` when responding directly.
 2. Ensure Ralph state exists and has `"workflow": "ralph"` and `"status": "active"`.
 3. Restate the target in one sentence.
 4. Decide whether a Capability Selection Pass is useful.
@@ -63,9 +60,8 @@ If Ralph state is missing, create it manually before doing other work:
 
 ## Capability Selection Pass
 
-Use this pass only when a discovered skill may materially change execution. Do not perform
-it as a ceremony for small, obvious, or purely local tasks — burning tokens and adding
-latency for no gain.
+Use this pass only when a discovered skill may materially change execution. Do not perform it as a
+ceremony for small, obvious, or purely local tasks.
 
 When useful, inspect the current session's Available Skills list. Consider Kimi built-in skills,
 project skills, user skills, and plugin skills equally; OMK skills are not preferred by default.
@@ -94,9 +90,7 @@ Reconsider this pass when the task scope changes.
 
 ## Plan Gate
 
-Use Kimi's native `EnterPlanMode` before execution when the task is non-trivial. The cost
-of a few minutes planning is negligible compared to redoing hours of work because the
-architecture was wrong from step one:
+Use Kimi's native `EnterPlanMode` before execution when the task is non-trivial:
 
 - new feature or meaningful behavior change
 - multiple files or modules
@@ -105,9 +99,9 @@ architecture was wrong from step one:
 - unclear scope or important user-visible choices
 - broad cleanup/refactor where the plan affects safety
 
-Skip Plan Mode only for small explicit fixes, pure read-only investigation, or small tasks
-where a quick exploration is enough to choose an obvious path — for these, the planning
-overhead exceeds the benefit. For small tasks, explore briefly and execute directly.
+Skip Plan Mode only for small explicit fixes, pure read-only investigation, or small tasks where a
+quick exploration is enough to choose an obvious path. For small tasks, explore briefly and execute
+directly.
 
 When Plan Mode is used, the plan must name selected skills, implementation shards, verification,
 review gate, and Ralph completion condition. After `ExitPlanMode` approval, execute the approved
@@ -141,16 +135,13 @@ Repeat until complete:
 6. Fix failures caused by this work.
 7. Update todos and Ralph evidence — stale state causes duplicated or skipped work.
 
-Do not stop at next steps when the next step is safe and available — each stop costs a
-full user round-trip.
-Keep Ralph evidence compact: command plus result, not raw output. The context window is
-shared between evidence and useful working state; raw output pushes out what matters.
+Do not stop at next steps when the next step is safe and available.
+Keep Ralph evidence compact: command plus result, not raw output.
 
 ## Subagents
 
-Subagents do not run Ultrawork, Ralph, plan approval, review gates, or final completion.
-Subagents are stateless — they cannot maintain the state machine or persist decisions.
-The root agent owns orchestration.
+Subagents do not run Ultrawork, Ralph, plan approval, review gates, or final completion. The root
+agent owns orchestration.
 
 Use subagents only for bounded work:
 

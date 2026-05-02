@@ -72,13 +72,12 @@ Focused code review covering security, correctness, tests, and architecture befo
 
 Generates usage insights reports from KimiCLI session history, analyzing work patterns, friction points, and suggesting improvements.
 
-- `omk insights message` produces a manifest, session packets, and a task brief for the current agent
-- The current agent writes the local HTML + JSON reports directly; the skill no longer depends on a second render step or sections file
+- `omk insights collect` gathers session data and produces a bounded analysis prompt
+- The current agent writes narrative analysis following the prompt and outputs structured JSON
+- `omk insights render` renders the result as HTML + JSON reports
 - Analysis dimensions: workflow signals, time-of-day patterns, friction details, repeated instructions, feature usage context
 - Produces concrete, actionable recommendations — not just summary statistics
-- Narrative reports include `skill_opportunities` and ask before creating/updating skills, hooks, or AGENTS.md instructions
 - CLI mode (`omk insights`) is metrics-only and never spawns a nested kimi process
-- `collect` / `render` were removed to avoid a drifting second report-generation pipeline
 - **Triggers:** `/skill:insights`, `usage insights`, `session analysis`, `friction analysis`
 
 ### `/skill:requirements-elicitation` — Pre-Execution Requirements Clarification
@@ -115,7 +114,8 @@ omk uninstall          # Remove managed hooks, plugin, and skills
 omk config             # Create or normalize ~/.omk/config.json
 omk doctor             # Print machine-readable installation diagnostics
 omk insights           # Generate a metrics-only KimiCLI usage report
-omk insights message   # Generate manifest, session packets, and task brief for /skill:insights
+omk insights collect   # Collect bounded input for /skill:insights
+omk insights render    # Render a narrative report from sections JSON
 omk insights paths     # Print insights artifact paths
 omk help               # Show this help
 ```

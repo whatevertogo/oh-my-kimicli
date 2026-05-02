@@ -14,10 +14,6 @@ export function defaultSections(aggregated = {}) {
   const useChinese = data.userLanguage?.code === "zh";
   const topProject = Object.keys(data.projects)[0] || "your KimiCLI sessions";
   const topTool = Object.keys(data.toolCounts)[0] || "tools";
-  const workflowItems = defaultWorkflowItems(data, useChinese ? "zh" : "en");
-  const featureSuggestions = defaultFeatureSuggestions(data, useChinese ? "zh" : "en");
-  const usagePatterns = defaultUsagePatterns(data, useChinese ? "zh" : "en");
-  const skillOpportunities = defaultSkillOpportunities(data, useChinese ? "zh" : "en");
   if (useChinese) {
     return {
       schema_version: 1,
@@ -35,8 +31,11 @@ export function defaultSections(aggregated = {}) {
         key_pattern: "metrics-only 模式能识别节奏和工具使用，但更深的叙事模式需要当前 agent 生成。"
       },
       what_works: {
-        intro: "从指标看，你已经有一些稳定有效的协作方式；叙事版报告会进一步解释这些模式为什么有效。",
-        impressive_workflows: workflowItems
+        intro: "成功模式需要当前 agent 的叙事分析补全。",
+        impressive_workflows: mapEntries(data.primarySuccess, 3, (title, count) => ({
+          title,
+          description: `${count} 个 session 匹配这个模式。`
+        }))
       },
       friction_analysis: {
         intro: renderMap(data.friction) || renderMap(data.toolErrorCategories) || "metrics-only 模式下没有发现明显摩擦模式。",
@@ -47,18 +46,43 @@ export function defaultSections(aggregated = {}) {
         }))
       },
       suggestions: {
-        kimi_instructions_additions: instructionAdditions(data, "zh"),
-        features_to_try: featureSuggestions,
-        usage_patterns: usagePatterns
+        kimi_instructions_additions: [],
+        features_to_try: [
+          {
+            feature: "OMK insights skill",
+            one_liner: "运行 /skill:insights，让当前 Kimi agent 写叙事 sections。",
+            why_for_you: "这样不会嵌套 kimi --print，也不会把 provider 限流风险放到外部命令里。",
+            example_code: "/skill:insights"
+          }
+        ],
+        usage_patterns: []
       },
-      skill_opportunities: skillOpportunities,
+      skill_opportunities: [
+        {
+          name: "insights-driven skill review",
+          trigger: "当 insights 多次发现同类重复工作流时",
+          why: "metrics-only 模式只能提示候选方向；叙事报告可以判断是否值得沉淀为 skill。",
+          evidence: [],
+          proposed_scope: "等待 /skill:insights 生成叙事 sections 后再决定。",
+          risk: "证据不足时创建 skill 会增加噪声。",
+          example_prompt: "/skill:insights",
+          recommended_action: "no_action"
+        }
+      ],
       on_the_horizon: {
-        intro: "后续报告可以把使用模式连接到更高层的自动化，而不是只展示统计。",
-        opportunities: horizonOpportunities(data, "zh")
+        intro: "后续报告可以把使用模式连接到更高层的自动化。",
+        opportunities: [
+          {
+            title: "自主 review loop",
+            whats_possible: "把 OMK insights、review、Ralph 和 ultrawork 组合起来，定位可复用的工作流缺口。",
+            how_to_try: "积累几个真实复杂 session 后运行 /skill:insights。",
+            copyable_prompt: "/skill:insights"
+          }
+        ]
       },
       fun_ending: {
-        headline: "你的工作流已经开始反过来塑造工具",
-        detail: `这批 session 里，最高频意图是 ${topIntent(data)}，最高频工具是 ${topTool}。即使没有叙事 pass，也能看出你在不断把临时协作沉淀成可复用机制。`
+        headline: "Metrics-only report",
+        detail: "没有提供当前 agent 生成的 sections，所以跳过叙事结尾。"
       }
     };
   }
@@ -78,8 +102,11 @@ export function defaultSections(aggregated = {}) {
       key_pattern: "Metrics-only mode can identify cadence and tool usage, but not deeper narrative patterns."
     },
     what_works: {
-      intro: "The metrics already show a few stable collaboration patterns; the narrative skill can explain why they work.",
-      impressive_workflows: workflowItems
+      intro: "Success patterns require the current agent's narrative pass.",
+      impressive_workflows: mapEntries(data.primarySuccess, 3, (title, count) => ({
+        title,
+        description: `${count} matching sessions.`
+      }))
     },
     friction_analysis: {
       intro: renderMap(data.friction) || renderMap(data.toolErrorCategories) || "No major friction pattern found in metrics-only mode.",
@@ -90,18 +117,43 @@ export function defaultSections(aggregated = {}) {
       }))
     },
     suggestions: {
-      kimi_instructions_additions: instructionAdditions(data, "en"),
-      features_to_try: featureSuggestions,
-      usage_patterns: usagePatterns
+      kimi_instructions_additions: [],
+      features_to_try: [
+        {
+          feature: "OMK insights skill",
+          one_liner: "Run /skill:insights for the current Kimi agent to write the narrative sections.",
+          why_for_you: "It avoids nested kimi --print calls and keeps rate limits under the active session.",
+          example_code: "/skill:insights"
+        }
+      ],
+      usage_patterns: []
     },
-    skill_opportunities: skillOpportunities,
+    skill_opportunities: [
+      {
+        name: "insights-driven skill review",
+        trigger: "when insights repeatedly finds the same workflow pattern",
+        why: "Metrics-only mode can point at candidates; the narrative pass should decide whether a skill is warranted.",
+        evidence: [],
+        proposed_scope: "Wait for /skill:insights to generate narrative sections before applying changes.",
+        risk: "Creating skills from weak evidence adds noise.",
+        example_prompt: "/skill:insights",
+        recommended_action: "no_action"
+      }
+    ],
     on_the_horizon: {
-      intro: "Future reports can connect usage patterns to higher-level automation instead of only showing counts.",
-      opportunities: horizonOpportunities(data, "en")
+      intro: "Future reports can connect usage patterns to higher-level automation.",
+      opportunities: [
+        {
+          title: "Autonomous review loops",
+          whats_possible: "Combine OMK insights with review, Ralph, and ultrawork to find repeatable workflow gaps.",
+          how_to_try: "Use /skill:insights after several substantial sessions.",
+          copyable_prompt: "/skill:insights"
+        }
+      ]
     },
     fun_ending: {
-      headline: "Your workflow is starting to shape the tooling back",
-      detail: `The strongest intent is ${topIntent(data)}, and the top tool is ${topTool}. Even without a narrative pass, the sessions show repeated attempts to turn ad-hoc collaboration into reusable mechanisms.`
+      headline: "Metrics-only report",
+      detail: "Narrative ending skipped because no current-agent sections were provided."
     }
   };
 }
@@ -117,319 +169,6 @@ function projectAreas(data, language) {
           ? `${Number(value?.messages || 0)} 条用户消息，分布在 ${Number(value?.sessions || 0)} 个 session。`
           : `${Number(value?.messages || 0)} user messages across ${Number(value?.sessions || 0)} sessions.`
     }));
-}
-
-function defaultWorkflowItems(data, language) {
-  const intents = data.workflowSignals?.prompt_intents || {};
-  const items = [];
-  if ((intents.review || 0) > 0) {
-    items.push(
-      language === "zh"
-        ? {
-            title: "审查驱动改进",
-            description: `review 类请求出现 ${intents.review} 次。你倾向于先让 agent 读代码和找风险，再决定是否修复，这适合沉淀成 omk-review 或项目级审查规则。`
-          }
-        : {
-            title: "Review-driven improvement",
-            description: `Review-style prompts appeared ${intents.review} time(s). You often ask the agent to inspect code and identify risks before changing it, which is a good fit for review skills or project-level review rules.`
-          }
-    );
-  }
-  if ((intents.planning || 0) > 0) {
-    items.push(
-      language === "zh"
-        ? {
-            title: "先想清楚再动手",
-            description: `planning 类请求出现 ${intents.planning} 次。你会在架构或复杂实现前追问方案边界，这和 KimiCLI plan mode 很契合。`
-          }
-        : {
-            title: "Plan before changing",
-            description: `Planning prompts appeared ${intents.planning} time(s). You ask for boundaries and tradeoffs before larger changes, which maps well to KimiCLI plan mode.`
-          }
-    );
-  }
-  if ((intents.implementation || 0) > 0 || data.totalFilesModified > 0) {
-    items.push(
-      language === "zh"
-        ? {
-            title: "从讨论落到文件",
-            description: `这批 session 涉及 ${data.totalFilesModified || 0} 个文件和 ${data.totalLinesAdded || 0} 行新增。你的有效模式不是只聊天，而是让 agent 把结论落到仓库产物里。`
-          }
-        : {
-            title: "Turning discussion into files",
-            description: `These sessions touched ${data.totalFilesModified || 0} files and added ${data.totalLinesAdded || 0} lines. Your strongest pattern is pushing the agent from discussion into repository artifacts.`
-          }
-    );
-  }
-  if (!items.length) {
-    items.push(
-      language === "zh"
-        ? {
-            title: "数据仍在积累",
-            description: "当前 session 还不够多，但已经能看到工具使用、项目分布和响应节奏。多跑几次后，叙事版报告会更有判断力。"
-          }
-        : {
-            title: "Evidence is still forming",
-            description: "There are not enough sessions for a strong pattern yet, but tool usage, project distribution, and response cadence are already measurable."
-          }
-    );
-  }
-  return items.slice(0, 3);
-}
-
-function instructionAdditions(data, language) {
-  const repeated = data.userInstructionsToAssistant || [];
-  if (repeated.length) {
-    return repeated.slice(0, 3).map((item) =>
-      language === "zh"
-        ? {
-            addition: item.instruction,
-            why: `这条指令重复出现 ${item.count} 次，适合放进 AGENTS.md 或相关 skill，避免以后反复说明。`,
-            prompt_scaffold: `请把这条稳定偏好加入合适的 AGENTS.md 或 skill：${item.instruction}`
-          }
-        : {
-            addition: item.instruction,
-            why: `This instruction appeared ${item.count} times, so it may belong in AGENTS.md or a relevant skill.`,
-            prompt_scaffold: `Add this stable preference to the right AGENTS.md or skill: ${item.instruction}`
-          }
-    );
-  }
-  return [
-    language === "zh"
-      ? {
-          addition: "把重复出现的审查、验证、计划偏好沉淀到 AGENTS.md 或 skill 中。",
-          why: "当前没有检测到完全重复的首轮指令，但任务意图已经显示出稳定偏好。",
-          prompt_scaffold: "请根据最近的 insights 报告，帮我把重复偏好整理成 AGENTS.md 或 skill 规则。"
-        }
-      : {
-          addition: "Move repeated review, verification, and planning preferences into AGENTS.md or skills.",
-          why: "No exact repeated first prompt was detected yet, but the intent distribution already shows stable preferences.",
-          prompt_scaffold: "Use the latest insights report to turn repeated preferences into AGENTS.md or skill rules."
-        }
-  ];
-}
-
-function defaultFeatureSuggestions(data, language) {
-  const intents = data.workflowSignals?.prompt_intents || {};
-  const mentions = data.workflowSignals?.feature_mentions || {};
-  const suggestions = [
-    language === "zh"
-      ? {
-          feature: "/skill:insights",
-          one_liner: "让当前 Kimi agent 直接生成叙事报告。",
-          why_for_you: "它避免嵌套 kimi --print，也能基于真实 session 反推出该沉淀哪些 skill/hook/AGENTS 指令。",
-          example_code: "/skill:insights"
-        }
-      : {
-          feature: "/skill:insights",
-          one_liner: "Let the current Kimi agent write the narrative report directly.",
-          why_for_you: "It avoids nested kimi --print and can turn real sessions into skill, hook, or AGENTS.md opportunities.",
-          example_code: "/skill:insights"
-        }
-  ];
-  if ((intents.review || 0) > 0 || (mentions.review || 0) > 0) {
-    suggestions.push(
-      language === "zh"
-        ? {
-            feature: "omk-review",
-            one_liner: "把审查输出固定到项目的 .omk 文件夹。",
-            why_for_you: "review 是高频意图时，固定格式和证据位置能减少每次重新解释标准。",
-            example_code: "/skill:omk-review"
-          }
-        : {
-            feature: "omk-review",
-            one_liner: "Keep review output under the project's .omk folder.",
-            why_for_you: "When review is frequent, fixed evidence and output locations reduce repeated setup.",
-            example_code: "/skill:omk-review"
-          }
-    );
-  }
-  if ((intents.autonomous_execution || 0) > 0 || (mentions.ralph || 0) > 0 || (mentions.ultrawork || 0) > 0) {
-    suggestions.push(
-      language === "zh"
-        ? {
-            feature: "Ralph / ultrawork",
-            one_liner: "让长任务持续到 done 或 blocked，而不是半途总结。",
-            why_for_you: "你的长任务里已经出现 Ralph/ultrawork 信号，适合把完成标准和验证证据固定下来。",
-            example_code: "/skill:ultrawork <任务>"
-          }
-        : {
-            feature: "Ralph / ultrawork",
-            one_liner: "Keep long tasks running until done or blocked.",
-            why_for_you: "Your longer sessions already mention Ralph or ultrawork, so completion criteria and evidence should be explicit.",
-            example_code: "/skill:ultrawork <task>"
-          }
-    );
-  }
-  return suggestions.slice(0, 3);
-}
-
-function defaultUsagePatterns(data, language) {
-  const errors = Number(data.totalToolErrors || 0);
-  const patterns = [
-    language === "zh"
-      ? {
-          title: "把大任务先切成计划",
-          suggestion: "多文件或架构任务先用 plan mode，让执行边界更稳定。",
-          detail: "当任务横跨多个模块时，先确认计划能减少后续反复修正；小任务仍可直接执行。",
-          copyable_prompt: "先进入 plan mode，探索项目后给我一份可执行计划，确认后再改代码。"
-        }
-      : {
-          title: "Plan large tasks first",
-          suggestion: "Use plan mode for multi-file or architectural work.",
-          detail: "When a task crosses module boundaries, a short approved plan reduces later correction; small tasks can still go straight to execution.",
-          copyable_prompt: "Enter plan mode first, inspect the project, and give me an executable plan before editing."
-        }
-  ];
-  if (errors > 0) {
-    patterns.push(
-      language === "zh"
-        ? {
-            title: "把失败转成下一步证据",
-            suggestion: "工具失败时要求 agent 记录失败原因和替代验证，而不是直接跳过。",
-            detail: `${errors} 次工具错误说明 report 应该把失败也当作工作流信号，用来优化 hooks 或 skill。`,
-            copyable_prompt: "如果工具失败，请记录失败命令、原因、替代检查，然后继续完成任务。"
-          }
-        : {
-            title: "Turn failures into evidence",
-            suggestion: "Ask the agent to record failed commands and alternate checks instead of skipping them.",
-            detail: `${errors} tool errors mean failures should feed skill or hook improvements, not disappear from the workflow.`,
-            copyable_prompt: "If a tool fails, record the command, reason, alternate check, and continue the task."
-          }
-    );
-  }
-  return patterns.slice(0, 3);
-}
-
-function defaultSkillOpportunities(data, language) {
-  const intents = data.workflowSignals?.prompt_intents || {};
-  const opportunities = [];
-  if ((intents.review || 0) > 0) {
-    opportunities.push(
-      language === "zh"
-        ? {
-            name: "review-output-discipline",
-            trigger: "用户要求 review、审查、检查潜在问题或提交前确认时",
-            why: "review 是可复用工作流，适合把输出位置、证据格式和验证要求固定下来。",
-            evidence: [`review intent: ${intents.review}`],
-            proposed_scope: "更新 omk-review 或新增更窄的项目审查 skill。",
-            risk: "过宽的 review skill 会变成噪声，必须绑定真实证据和 changed files。",
-            example_prompt: "/skill:omk-review",
-            recommended_action: "update_skill"
-          }
-        : {
-            name: "review-output-discipline",
-            trigger: "when the user asks for review, risk checks, or pre-commit validation",
-            why: "Review is a reusable workflow that benefits from fixed output paths, evidence format, and verification rules.",
-            evidence: [`review intent: ${intents.review}`],
-            proposed_scope: "Update omk-review or create a narrower project-review skill.",
-            risk: "A broad review skill becomes noise unless it is tied to real evidence and changed files.",
-            example_prompt: "/skill:omk-review",
-            recommended_action: "update_skill"
-          }
-    );
-  }
-  if ((intents.autonomous_execution || 0) > 0) {
-    opportunities.push(
-      language === "zh"
-        ? {
-            name: "autonomous-completion-discipline",
-            trigger: "用户要求持续执行、Ralph、ultrawork 或任务完成后再停时",
-            why: "长任务需要固定 done/blocked 状态、验证证据和继续策略。",
-            evidence: [`autonomous_execution intent: ${intents.autonomous_execution}`],
-            proposed_scope: "收紧 ultrawork 与 omk-ralph 的协作提示。",
-            risk: "如果过度强制，会让小任务显得笨重。",
-            example_prompt: "/skill:ultrawork <任务>",
-            recommended_action: "update_skill"
-          }
-        : {
-            name: "autonomous-completion-discipline",
-            trigger: "when the user asks for Ralph, ultrawork, or keep-going execution",
-            why: "Long tasks need explicit done/blocked state, verification evidence, and continuation rules.",
-            evidence: [`autonomous_execution intent: ${intents.autonomous_execution}`],
-            proposed_scope: "Tighten ultrawork and omk-ralph coordination prompts.",
-            risk: "Over-enforcing this can make small tasks feel heavy.",
-            example_prompt: "/skill:ultrawork <task>",
-            recommended_action: "update_skill"
-          }
-    );
-  }
-  if (!opportunities.length) {
-    opportunities.push(
-      language === "zh"
-        ? {
-            name: "暂不创建新 skill",
-            trigger: "当前证据不足以证明某个新 skill 有长期价值",
-            why: "insights 应该减少噪声，而不是每次报告都制造新机制。",
-            evidence: ["没有发现强重复意图"],
-            proposed_scope: "继续积累 session，下次报告再判断。",
-            risk: "过早创建 skill 会增加维护成本。",
-            example_prompt: "/skill:insights",
-            recommended_action: "no_action"
-          }
-        : {
-            name: "do-not-create-a-new-skill-yet",
-            trigger: "when evidence does not justify a durable new workflow",
-            why: "Insights should reduce noise, not create a new mechanism on every report.",
-            evidence: ["no strong repeated intent found"],
-            proposed_scope: "Collect more sessions and decide in the next report.",
-            risk: "Creating skills too early adds maintenance cost.",
-            example_prompt: "/skill:insights",
-            recommended_action: "no_action"
-          }
-    );
-  }
-  return opportunities.slice(0, 3);
-}
-
-function horizonOpportunities(data, language) {
-  const topTool = Object.keys(data.toolCounts || {})[0] || "ReadFile";
-  if (language === "zh") {
-    return [
-      {
-        title: "由 insights 反向生成工作流",
-        whats_possible: "当报告连续发现同类摩擦时，下一步不只是阅读建议，而是让 agent 直接起草 skill、hook 或 AGENTS.md 规则。",
-        how_to_try: "运行 /skill:insights 后，只确认一个最强候选，让 agent 基于真实 session 数据改插件。",
-        copyable_prompt: "基于这份 insights 报告，先只实现最有证据的一个 skill/hook 改进。"
-      },
-      {
-        title: "计划模式与 Ralph 串联",
-        whats_possible: "大任务先 plan，再由 Ralph/ultrawork 持续执行和验证，可以减少半途总结与遗漏。",
-        how_to_try: "对多文件任务要求先 EnterPlanMode，确认后进入完成循环。",
-        copyable_prompt: "这是一个大任务：先 plan，确认后用 Ralph/ultrawork 持续执行到 done 或 blocked。"
-      },
-      {
-        title: "围绕高频工具优化提示",
-        whats_possible: `${topTool} 是高频工具时，说明协作成本集中在读取、搜索或验证链路。可以把这些链路写成更短的项目规则。`,
-        how_to_try: "把报告里最高频工具和错误类型作为 hook/skill 优化输入。",
-        copyable_prompt: "根据 insights 的高频工具和错误类型，帮我优化一个最小的提示规则。"
-      }
-    ];
-  }
-  return [
-    {
-      title: "Generate workflows from insights",
-      whats_possible: "When reports repeatedly find the same friction, the next step can be drafting a skill, hook, or AGENTS.md rule from real session evidence.",
-      how_to_try: "Run /skill:insights, confirm one strongest candidate, and let the agent update the plugin.",
-      copyable_prompt: "Based on this insights report, implement only the strongest evidence-backed skill or hook improvement."
-    },
-    {
-      title: "Plan mode plus Ralph",
-      whats_possible: "Large tasks can start with plan approval, then continue through Ralph or ultrawork until verified done or blocked.",
-      how_to_try: "Ask for EnterPlanMode on multi-file tasks, then move into a completion loop after approval.",
-      copyable_prompt: "This is a large task: plan first, then use Ralph/ultrawork until done or blocked."
-    },
-    {
-      title: "Optimize around frequent tools",
-      whats_possible: `When ${topTool} is the top tool, collaboration cost is probably concentrated in reading, searching, or verification. Those paths can become shorter project rules.`,
-      how_to_try: "Use the most frequent tools and error categories as hook or skill optimization input.",
-      copyable_prompt: "Use the insights top tools and error categories to propose one minimal prompt rule."
-    }
-  ];
-}
-
-function topIntent(data) {
-  return Object.keys(data.workflowSignals?.prompt_intents || {})[0] || "general";
 }
 
 export function normalizeSections(value, aggregated = {}) {

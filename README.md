@@ -65,13 +65,13 @@ oh-my-kimicli 安装 6 个 skill 到 KimiCLI，在对话中通过 `/skill:<name>
 
 基于 KimiCLI 会话历史生成使用洞察报告，分析工作模式、摩擦点并提供改进建议。
 
-- `omk insights message` 生成 manifest、session packet 和当前 agent 任务单
-- 当前 agent 直接编写本地 HTML + JSON 报告，不再依赖二次 render 或 sections 中间文件
+- `omk insights collect` 收集会话数据，生成有界分析提示
+- 当前 agent 根据提示编写叙事分析并输出结构化 JSON
+- `omk insights render` 渲染为 HTML + JSON 报告
 - 分析维度：工作流信号、时段分布、摩擦细节、重复指令、功能使用上下文
 - 报告给出具体可操作的建议，而非仅统计汇总
 - 叙事报告会输出 `skill_opportunities`，提示哪些重复工作流值得在用户确认后沉淀为 skill、hook 或 AGENTS.md 指令
 - CLI 模式（`omk insights`）仅输出指标，不启动嵌套 kimi 进程
-- 已删除 `collect` / `render` 双轨管线，避免报告生成逻辑漂移
 - **触发词：** `/skill:insights`、`usage insights`、`session analysis`、`friction analysis`
 
 ### `/skill:requirements-elicitation` — 执行前需求澄清
@@ -108,7 +108,8 @@ omk uninstall          # 移除托管 hooks、插件和 skill
 omk config             # 创建或规范化 ~/.omk/config.json
 omk doctor             # 输出机器可读的安装诊断信息
 omk insights           # 生成纯指标的 KimiCLI 使用报告
-omk insights message   # 为 /skill:insights 生成 manifest、session packets 和任务单
+omk insights collect   # 收集 /skill:insights 的有界输入
+omk insights render    # 从 sections JSON 渲染叙事报告
 omk insights paths     # 打印 insights 产物的文件路径
 omk help               # 显示帮助
 ```

@@ -1,59 +1,83 @@
 ---
 name: insights
-description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, skill opportunities, repeated-instruction analysis, or an insights report.
+description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, or an insights report.
 ---
 
 # OMK Insights
 
-Generate a usage report from KimiCLI session history. OMK collects bounded evidence and session packet files; the current agent writes the narrative report directly.
+Use the OMK collector, write the narrative sections as the current Kimi agent, then ask OMK to render the report.
 
-## Route
-
-- Default narrative report: run `omk insights message <args>`.
-- Quick, local, statistical, or `--no-llm` request: run `omk insights --no-llm <args>` and summarize paths/counts only.
-- If `omk` is unavailable, ask the user to run `omk setup` or reinstall oh-my-kimicli.
-
-Pass through relevant flags such as `--limit`, `--facet-limit`, and `--force`. For token-saving requests, prefer `--facet-limit 10`.
+Do not manually inspect session logs unless the collector fails.
 
 ## Narrative Workflow
 
-1. Run `omk insights message <args>`.
-2. Read the generated `insights-agent-task.md`.
-3. Read the generated `manifest.json`.
-4. Read ranked session packet files from the manifest, starting with `recommended_read_mode: "deep"`.
-5. Extract session facets and write `insights-facets.json`.
-6. Generate the final `report.json` directly. It must include metrics, facets, sections, and quality notes.
-7. Generate the final self-contained `report.html` directly from `report.json`.
-8. Self-review before the final response:
-   - facets were written before the report
-   - At a Glance was written after the other sections
-   - suggestions are evidence-backed
-   - weak sections are omitted or moved to Evidence Notes
-   - headings avoid awkward machine translation
-   - skill opportunities exist only when repeated usage, clear friction, or high leverage is visible
+1. Treat user-supplied flags as arguments for collect when they are relevant.
+2. Run:
 
-Treat the task file as the authority for paths, limits, language guidance, report shape, and the final user question.
+   `omk insights collect <args>`
+
+3. Read the generated `insights-prompt.md` path from stdout.
+4. Follow that prompt exactly:
+   - read the bounded payload described by the prompt
+   - write strict JSON to the reported `insights-sections.json`
+   - use the schema in the prompt
+   - write prose in `preferred_output_language`
+   - ground suggestions in `workflow_signals`, `time_of_day`, `friction_details`, `user_instructions`, and `recommendation_context`
+5. Run the reported render command:
+
+   `omk insights render --sections <insights-sections.json>`
+
+6. Final response includes only:
+   - HTML report path
+   - JSON report path
+   - sessions scanned/analyzed
+   - skipped data or sections, if any
+   - one short question asking whether to apply any `skill_opportunities` by creating/updating a skill, hook, or AGENTS.md instruction
 
 ## Boundaries
 
 - Do not run bare `omk insights` for the narrative workflow.
-- Do not run `omk insights render`; that pipeline is intentionally removed.
 - Do not run `kimi --print`.
-- Do not manually scan `~/.kimi/sessions`.
+- Do not scan `~/.kimi/sessions` manually.
 - Do not paste full raw transcripts into context.
-- Do not create or update skills, hooks, or AGENTS.md during the report run. Ask first.
-- `No entries`, `暂无信息`, or an omitted section is valid when evidence is weak.
-- Do not manufacture recommendations just to fill a section.
-- If the task brief is insufficient, read the reported `insights-input.json` and session packet files. If they are too large, rerun with a smaller `--limit` or `--facet-limit`.
+- Do not translate command names, paths, skill names, or product names.
+- Do not create or update skills from `skill_opportunities` during this skill run. Ask first.
+- If the prompt or payload is too large, suggest `omk insights --no-llm` or rerun collect with a smaller `--limit` / `--facet-limit`.
+1. Treat user-supplied flags as arguments for collect when they are relevant.
+2. Run:
 
-## Final Response
+   `omk insights collect <args>`
 
-Report only:
+3. Read the generated `insights-prompt.md` path from stdout.
+4. Follow that prompt exactly:
+   - read the bounded payload described by the prompt
+   - write strict JSON to the reported `insights-sections.json`
+   - use the schema in the prompt
+   - write prose in `preferred_output_language`
+   - ground suggestions in `workflow_signals`, `time_of_day`, `friction_details`, `user_instructions`, and `recommendation_context`
+5. Run the reported render command:
 
-- HTML report path
-- JSON report path
-- sessions scanned/analyzed
-- weak-evidence sections or data limits, if any
-- one short question asking whether to create or update a skill, hook, or AGENTS.md instruction only when the report has a concrete skill opportunity with action `create_skill`, `update_skill`, `add_hook`, or `add_agents_instruction`
+   `omk insights render --sections <insights-sections.json>`
 
-If there is no reliable candidate, say that the current evidence is not strong enough to create a targeted skill yet.
+6. Final response includes only:
+   - HTML report path
+   - JSON report path
+   - sessions scanned/analyzed
+   - skipped data or sections, if any
+   - one short question asking whether to apply any `skill_opportunities` by creating/updating a skill, hook, or AGENTS.md instruction
+
+## Boundaries
+
+- Do not run bare `omk insights` for the narrative workflow.
+- Do not run `kimi --print`.
+- Do not scan `~/.kimi/sessions` manually.
+- Do not paste full raw transcripts into context.
+- Do not translate command names, paths, skill names, or product names.
+- Do not create or update skills from `skill_opportunities` during this skill run. Ask first.
+- If the prompt or payload is too large, suggest `omk insights --no-llm` or rerun collect with a smaller `--limit` / `--facet-limit`.
+
+## Examples
+
+- `/skill:insights` -> `omk insights collect`
+- `/skill:insights --limit 50` -> `omk insights collect --limit 50`
+- `/skill:insights 少花点 token` -> `omk insights collect --facet-limit 10`
