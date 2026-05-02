@@ -15,10 +15,22 @@ This package does not fork or patch KimiCLI. It installs:
 
 ## Setup
 
+Install from the GitHub repository:
+
 ```sh
-bun install -g oh-my-kimicli
+bun install -g github:whatevertogo/oh-my-kimicli
 omk setup
 ```
+
+If your Bun/npm registry is set to a mirror and you later publish this package to npm, switch back
+to the official registry first:
+
+```sh
+npm config set registry https://registry.npmjs.org/
+```
+
+The package is not published to npm yet, so `bun install -g oh-my-kimicli` will return 404 until it
+is published.
 
 After upgrading the package, run `omk setup --force` if you want to refresh the managed
 skills from the new package version. Plain `omk setup` preserves existing skill directories.
