@@ -22,7 +22,6 @@ import {
   packageRoot
 } from "./paths.ts";
 import { ensureConfig, readConfig } from "./config.ts";
-import { isKimiAvailable, kimiBinary } from "./insights/llm.ts";
 
 const HOOK_BLOCK_START = "# >>> oh-my-kimicli hooks >>>";
 const HOOK_BLOCK_END = "# <<< oh-my-kimicli hooks <<<";
@@ -66,9 +65,7 @@ export function doctor() {
       insights_installed: existsSync(join(skills, "insights", "SKILL.md"))
     },
     usage_data_dir: omkUsageDataDir(),
-    usage_data_writable: isWritableDir(omkUsageDataDir()),
-    kimi_bin: kimiBinary(),
-    kimi_available: isKimiAvailable()
+    usage_data_writable: isWritableDir(omkUsageDataDir())
   };
 }
 
@@ -83,8 +80,7 @@ export function formatDoctorSummary(data = doctor()) {
     `plugin: ${data.plugin_installed ? "installed" : "missing"}`,
     `skills: ${data.installed_skills.length ? data.installed_skills.join(", ") : "none"}`,
     `insights skill: ${data.skills.insights_installed ? "installed" : "missing"}`,
-    `usage_data_dir: ${data.usage_data_dir} (${data.usage_data_writable ? "writable" : "not writable"})`,
-    `kimi binary: ${data.kimi_bin} (${data.kimi_available ? "available" : "unavailable"})`
+    `usage_data_dir: ${data.usage_data_dir} (${data.usage_data_writable ? "writable" : "not writable"})`
   ].join("\n");
 }
 

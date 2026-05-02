@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 
-import { generateInsightsReport } from "../lib/insights/report.ts";
+import {
+  collectInsightsInput,
+  generateMetricsOnlyReport,
+  insightsPaths,
+  renderInsightsReport
+} from "../lib/insights/report.ts";
+import { runInsightsCli } from "../lib/insights/cli.ts";
 import { scanSessions } from "../lib/insights/scan.ts";
 import { buildSessionMeta } from "../lib/insights/meta.ts";
 import { readWireTurns } from "../lib/insights/wire.ts";
@@ -97,7 +103,7 @@ test("insights no-llm report is generated from Kimi sessions", () =>
       ]
     });
 
-    const report = await generateInsightsReport({ noLlm: true, env });
+    const report = await generateMetricsOnlyReport({ noLlm: true, env });
 
     assert.equal(report.scannedSessions, 1);
     assert.equal(report.analyzedSessions, 1);
@@ -107,6 +113,90 @@ test("insights no-llm report is generated from Kimi sessions", () =>
     assert.equal(existsSync(report.reportHtmlPath), true);
     assert.equal(existsSync(report.reportJsonPath), true);
     assert.match(readFileSync(report.reportHtmlPath, "utf8"), /oh-my-kimicli insights/);
+    assert.equal(report.mode, "metrics-only");
+  }));
+
+test("insights collect writes bounded input prompt and draft", () =>
+  withTempHomes(async (dir, env) => {
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [
+        { user: "real task one with a short request" },
+        { user: "/skill:insights" },
+        { user: "real task two", tools: [{ id: "t1", name: "Shell", arguments: { command: "false" }, error: "Exit Code 1" }] }
+      ]
+    });
+
+    const input = await collectInsightsInput({ env, limit: 20, facetLimit: 10 });
+    const paths = insightsPaths(env);
+    const prompt = readFileSync(paths.promptPath, "utf8");
+    const payload = JSON.parse(readFileSync(paths.inputPath, "utf8"));
+
+    assert.equal(existsSync(paths.inputPath), true);
+    assert.equal(existsSync(paths.promptPath), true);
+    assert.equal(existsSync(paths.draftHtmlPath), true);
+    assert.equal(payload.schema_version, 1);
+    assert.equal(payload.render.sections_path, paths.sectionsPath);
+    assert.match(prompt, /Required JSON Schema/);
+    assert.match(prompt, /omk insights render --sections/);
+    assert.equal(payload.session_summaries.length, 1);
+    assert.equal(payload.session_summaries[0].user_messages, 2);
+    assert.doesNotMatch(JSON.stringify(payload), /TurnBegin/);
+    assert.equal(input.scannedSessions, 1);
+  }));
+
+test("insights render consumes agent sections and writes final report", () =>
+  withTempHomes(async (dir, env) => {
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [{ user: "build report" }, { user: "verify report" }]
+    });
+    await collectInsightsInput({ env });
+    const paths = insightsPaths(env);
+    writeFileSync(
+      paths.sectionsPath,
+      JSON.stringify({
+        schema_version: 1,
+        at_a_glance: {
+          whats_working: "<strong>escaped</strong>",
+          whats_hindering: "Few issues",
+          quick_wins: "Use skills",
+          ambitious_workflows: "Use Ralph"
+        },
+        project_areas: { areas: [{ name: "Project", session_count: 1, description: "Work area" }] },
+        interaction_style: { narrative: "Direct", key_pattern: "Iterative" },
+        what_works: { intro: "Good", impressive_workflows: [{ title: "Review", description: "Works" }] },
+        friction_analysis: { intro: "Low", categories: [] },
+        suggestions: { kimi_instructions_additions: [], features_to_try: [], usage_patterns: [] },
+        on_the_horizon: { intro: "More", opportunities: [] },
+        fun_ending: { headline: "Done", detail: "Clean" }
+      }),
+      "utf8"
+    );
+
+    const report = await renderInsightsReport({ env, sectionsPath: paths.sectionsPath });
+    const html = readFileSync(report.reportHtmlPath, "utf8");
+    const json = JSON.parse(readFileSync(report.reportJsonPath, "utf8"));
+
+    assert.equal(report.mode, "narrative");
+    assert.equal(json.sections.fun_ending.headline, "Done");
+    assert.match(html, /&lt;strong&gt;escaped&lt;\/strong&gt;/);
+  }));
+
+test("insights render rejects non-json sections with a clear error", () =>
+  withTempHomes(async (dir, env) => {
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [{ user: "build report" }, { user: "verify report" }]
+    });
+    await collectInsightsInput({ env });
+    const paths = insightsPaths(env);
+    writeFileSync(paths.sectionsPath, "not-json", "utf8");
+
+    await assert.rejects(() => renderInsightsReport({ env, sectionsPath: paths.sectionsPath }), /Invalid insights sections JSON/);
   }));
 
 test("insights turn filtering keeps other turns in the same session", () =>
@@ -135,5 +225,34 @@ test("insights skill frontmatter is discoverable", () => {
   const text = readFileSync(join(import.meta.dir, "..", "skills", "insights", "SKILL.md"), "utf8");
 
   assert.match(text, /^---\nname: insights\n/m);
-  assert.match(text, /omk insights <args>/);
+  assert.match(text, /omk insights collect/);
+  assert.match(text, /omk insights render --sections/);
+  assert.doesNotMatch(text, /kimi --print`\s*$/m);
 });
+
+test("insights cli supports collect render paths and metrics commands", () =>
+  withTempHomes(async (dir, env) => {
+    const lines = [];
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [{ user: "build report" }, { user: "verify report" }]
+    });
+
+    await runInsightsCli(["collect", "--limit", "20"], { env, stdout: (line) => lines.push(line) });
+    assert.match(lines.at(-1), /insights collect complete/);
+
+    const paths = insightsPaths(env);
+    writeFileSync(paths.sectionsPath, JSON.stringify({ schema_version: 1 }), "utf8");
+    await runInsightsCli(["render", "--sections", paths.sectionsPath], {
+      env,
+      stdout: (line) => lines.push(line)
+    });
+    assert.match(lines.at(-1), /insights render complete/);
+
+    await runInsightsCli(["paths"], { env, stdout: (line) => lines.push(line) });
+    assert.match(lines.at(-1), /render_command:/);
+
+    await runInsightsCli(["--no-llm"], { env, stdout: (line) => lines.push(line) });
+    assert.match(lines.at(-1), /metrics report complete/);
+  }));

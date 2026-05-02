@@ -113,7 +113,11 @@ omk setup
 omk uninstall
 omk config
 omk doctor
+omk insights
 omk insights --no-llm
+omk insights collect
+omk insights render --sections ~/.omk/usage-data/insights-sections.json
+omk insights paths
 omk help
 ```
 
@@ -193,16 +197,17 @@ After setup, start KimiCLI and use:
 
 ```text
 /skill:ultrawork <task>
-/skill:insights --no-llm
+/skill:insights
 /skill:requirements-elicitation <task>
 /skill:clarify-first <decision>
 /skill:omk-ralph <task>
 /skill:omk-review <scope>
 ```
 
-`/skill:insights` is the KimiCLI-internal entrypoint for the deterministic `omk insights` engine.
-Use `--no-llm` for a quick metrics-only report, or omit it to let OMK ask Kimi for narrative
-facet analysis and report sections.
+`omk insights` is metrics-only and never starts a nested `kimi --print` process. For narrative
+analysis inside KimiCLI, use `/skill:insights`: the skill runs `omk insights collect`, reads the
+bounded prompt/input from `~/.omk/usage-data`, writes `insights-sections.json` as the current
+agent, then runs `omk insights render --sections ...`.
 
 `/skill:ultrawork <task>` is the high-output orchestration mode. It asks KimiCLI to use
 `omk-ralph` state discipline, shard work across subagents, integrate results, run
