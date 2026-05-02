@@ -47,6 +47,11 @@ export function doctor() {
   const skills = kimiUserSkillsDir();
   const omkConfig = readConfig();
   const configText = existsSync(config) ? readFileSync(config, "utf8") : "";
+  const installedInsightsSkill = join(skills, "insights", "SKILL.md");
+  const insightsSkillText = existsSync(installedInsightsSkill)
+    ? readFileSync(installedInsightsSkill, "utf8")
+    : "";
+  const insightsSkillCurrent = isCurrentInsightsSkill(insightsSkillText);
   return {
     share_dir: omkDataDir().replace(/[\\/]oh-my-kimicli$/, ""),
     data_dir: omkDataDir(),
@@ -62,7 +67,9 @@ export function doctor() {
     skills_dir: skills,
     installed_skills: listInstalledSkills(skills),
     skills: {
-      insights_installed: existsSync(join(skills, "insights", "SKILL.md"))
+      insights_installed: existsSync(installedInsightsSkill),
+      insights_current: insightsSkillCurrent,
+      insights_stale: existsSync(installedInsightsSkill) && !insightsSkillCurrent
     },
     usage_data_dir: omkUsageDataDir(),
     usage_data_writable: isWritableDir(omkUsageDataDir())
@@ -79,7 +86,7 @@ export function formatDoctorSummary(data = doctor()) {
     `hooks: ${data.hooks_installed ? "installed" : "missing"}`,
     `plugin: ${data.plugin_installed ? "installed" : "missing"}`,
     `skills: ${data.installed_skills.length ? data.installed_skills.join(", ") : "none"}`,
-    `insights skill: ${data.skills.insights_installed ? "installed" : "missing"}`,
+    `insights skill: ${data.skills.insights_installed ? (data.skills.insights_current ? "current" : "stale") : "missing"}`,
     `usage_data_dir: ${data.usage_data_dir} (${data.usage_data_writable ? "writable" : "not writable"})`
   ].join("\n");
 }
@@ -232,4 +239,15 @@ function isWritableDir(dir) {
   } catch {
     return false;
   }
+}
+
+function isCurrentInsightsSkill(text) {
+  return (
+    text.includes("omk insights prepare") &&
+    text.includes("evidence-pack.md") &&
+    text.includes("omk insights render") &&
+    !text.includes("omk insights collect") &&
+    !text.includes("insights-prompt.md") &&
+    !text.includes("--no-llm")
+  );
 }

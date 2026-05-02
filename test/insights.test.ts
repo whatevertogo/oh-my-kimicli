@@ -1,32 +1,46 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import { test } from "bun:test";
 
-import {
-  collectInsightsInput,
-  generateMetricsOnlyReport,
-  insightsPaths,
-  renderInsightsReport
-} from "../lib/insights/report.ts";
 import { runInsightsCli } from "../lib/insights/cli.ts";
-import { scanSessions } from "../lib/insights/scan.ts";
+import { insightsPaths, prepareInsightsEvidence, renderInsightsReport } from "../lib/insights/report.ts";
 import { buildSessionMeta } from "../lib/insights/meta.ts";
+import { scanSessions } from "../lib/insights/scan.ts";
 import { readWireTurns } from "../lib/insights/wire.ts";
+import { doctor } from "../lib/setup.ts";
 
 async function withTempHomes(fn) {
   const dir = mkdtempSync(join(tmpdir(), "omk-insights-"));
   const env = {
     ...process.env,
     KIMI_SHARE_DIR: join(dir, ".kimi"),
+    KIMI_USER_SKILLS_DIR: join(dir, ".kimi-skills"),
     OMK_HOME: join(dir, ".omk")
   };
+  const oldEnv = {
+    KIMI_SHARE_DIR: process.env.KIMI_SHARE_DIR,
+    KIMI_USER_SKILLS_DIR: process.env.KIMI_USER_SKILLS_DIR,
+    OMK_HOME: process.env.OMK_HOME
+  };
+  Object.assign(process.env, env);
   try {
     return await fn(dir, env);
   } finally {
+    restoreEnv(oldEnv);
     rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function restoreEnv(values) {
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
   }
 }
 
@@ -34,7 +48,7 @@ function writeSession(env, { workDir, sessionId, turns }) {
   const hash = createHash("md5").update(workDir, "utf8").digest("hex");
   const sessionDir = join(env.KIMI_SHARE_DIR, "sessions", hash, sessionId);
   const wirePath = join(sessionDir, "wire.jsonl");
-  mkdirp(sessionDir);
+  mkdirSync(sessionDir, { recursive: true });
   const lines = [{ type: "metadata", protocol_version: "1" }];
   let timestamp = 1770000000;
   for (const turn of turns) {
@@ -74,7 +88,7 @@ function writeSession(env, { workDir, sessionId, turns }) {
   }
   writeFileSync(wirePath, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`, "utf8");
   writeFileSync(join(sessionDir, "context.jsonl"), "", "utf8");
-  mkdirp(env.KIMI_SHARE_DIR);
+  mkdirSync(env.KIMI_SHARE_DIR, { recursive: true });
   writeFileSync(
     join(env.KIMI_SHARE_DIR, "kimi.json"),
     JSON.stringify({ work_dirs: [{ path: workDir, kaos: "local" }] }),
@@ -83,294 +97,114 @@ function writeSession(env, { workDir, sessionId, turns }) {
   return { hash, sessionDir, wirePath };
 }
 
-function mkdirp(path) {
-  mkdirSync(path, { recursive: true });
-}
-
 function record(timestamp, type, payload) {
   return { timestamp, message: { type, payload } };
 }
 
-test("insights no-llm report is generated from Kimi sessions", () =>
+test("insights prepare generates an evidence pack with real session excerpts", () =>
   withTempHomes(async (dir, env) => {
     writeSession(env, {
       workDir: join(dir, "project"),
       sessionId: "s1",
       turns: [
         {
-          user: "add feature",
-          tools: [{ id: "t1", name: "WriteFile", arguments: { path: "src/app.ts", content: "one\ntwo" } }]
+          user: "review this cache layer and find risks",
+          assistant: "I will inspect the relevant files first.",
+          tools: [{ id: "t1", name: "ReadFile", arguments: { path: "src/cache.ts" } }]
         },
-        { user: "run tests", tools: [{ id: "t2", name: "Shell", arguments: { command: "git commit -m x" } }] }
+        {
+          user: "fix the failing test and keep evidence",
+          assistant: "The test fails because the cache is not invalidated.",
+          tools: [{ id: "t2", name: "Shell", arguments: { command: "bun test" }, error: "Exit Code 1" }]
+        },
+        { user: "/skill:insights" }
       ]
     });
 
-    const report = await generateMetricsOnlyReport({ noLlm: true, env });
+    const evidence = await prepareInsightsEvidence({ env, limit: 20, facetLimit: 10 });
+    const paths = insightsPaths(env);
+    const markdown = readFileSync(paths.evidenceMarkdownPath, "utf8");
+    const payload = JSON.parse(readFileSync(paths.evidenceJsonPath, "utf8"));
 
-    assert.equal(report.scannedSessions, 1);
-    assert.equal(report.analyzedSessions, 1);
-    assert.equal(report.aggregated.totalUserMessages, 2);
-    assert.equal(report.aggregated.languages.TypeScript, 1);
-    assert.equal(report.aggregated.totalGitCommits, 1);
-    assert.equal(existsSync(report.reportHtmlPath), true);
-    assert.equal(existsSync(report.reportJsonPath), true);
-    assert.match(readFileSync(report.reportHtmlPath, "utf8"), /oh-my-kimicli insights/);
-    assert.equal(report.mode, "metrics-only");
+    assert.equal(existsSync(paths.evidenceMarkdownPath), true);
+    assert.equal(existsSync(paths.evidenceJsonPath), true);
+    assert.equal(existsSync(paths.schemaPath), true);
+    assert.equal(payload.schema_version, 2);
+    assert.equal(payload.session_evidence.length, 1);
+    assert.match(markdown, /review this cache layer/);
+    assert.match(markdown, /Exit Code 1/);
+    assert.match(markdown, /Write exactly one JSON object/);
+    assert.match(markdown, /At a Glance last/);
+    assert.doesNotMatch(markdown, /TurnBegin/);
+    assert.equal(evidence.scannedSessions, 1);
   }));
 
-test("insights collect writes bounded input prompt and draft", () =>
+test("insights prepare prefers Chinese when session evidence is Chinese", () =>
   withTempHomes(async (dir, env) => {
     writeSession(env, {
       workDir: join(dir, "project"),
       sessionId: "s1",
-      turns: [
-        { user: "add feature real task one with a short request" },
-        { user: "/skill:insights" },
-        { user: "real task two", tools: [{ id: "t1", name: "Shell", arguments: { command: "false" }, error: "Exit Code 1" }] }
-      ]
+      turns: [{ user: "请你 review 这个方案，并指出有什么风险" }, { user: "继续修复这个问题" }]
     });
 
-    const input = await collectInsightsInput({ env, limit: 20, facetLimit: 10 });
-    const paths = insightsPaths(env);
-    const prompt = readFileSync(paths.promptPath, "utf8");
-    const payload = JSON.parse(readFileSync(paths.inputPath, "utf8"));
+    const evidence = await prepareInsightsEvidence({ env });
 
-    assert.equal(existsSync(paths.inputPath), true);
-    assert.equal(existsSync(paths.promptPath), true);
-    assert.equal(existsSync(paths.draftHtmlPath), true);
-    assert.equal(payload.schema_version, 1);
-    assert.equal(payload.render.sections_path, paths.sectionsPath);
-    assert.equal(payload.preferred_output_language.code, "en");
-    assert.equal(payload.workflow_signals.prompt_intents.implementation, 1);
-    assert.equal(typeof payload.recommendation_context.omk[0], "string");
-    assert.match(prompt, /Required JSON Schema/);
-    assert.match(prompt, /Write the narrative sections in natural English/);
-    assert.match(prompt, /skill_opportunities/);
-    assert.match(prompt, /Write every section in the required JSON object/);
-    assert.match(prompt, /omk insights render --sections/);
-    assert.equal(payload.session_summaries.length, 1);
-    assert.equal(payload.session_summaries[0].user_messages, 2);
-    assert.doesNotMatch(JSON.stringify(payload), /TurnBegin/);
-    assert.equal(input.scannedSessions, 1);
+    assert.equal(evidence.preferred_output_language.code, "zh");
+    assert.match(readFileSync(insightsPaths(env).evidenceMarkdownPath, "utf8"), /natural Simplified Chinese/);
   }));
 
-test("insights collect prefers the user's Chinese language for narrative output", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [
-        { user: "请你 review 一下这个方案，有无可以优化的地方" },
-        { user: "继续修复这个问题" }
-      ]
-    });
-
-    const input = await collectInsightsInput({ env });
-    const paths = insightsPaths(env);
-    const payload = JSON.parse(readFileSync(paths.inputPath, "utf8"));
-    const prompt = readFileSync(paths.promptPath, "utf8");
-
-    assert.equal(input.preferred_output_language.code, "zh");
-    assert.equal(payload.preferred_output_language.code, "zh");
-    assert.match(prompt, /natural Simplified Chinese/);
-    assert.equal(payload.session_summaries[0].prompt_language, "mixed Chinese-English");
-    assert.equal(payload.session_summaries[0].workflow_tags.includes("review"), true);
-  }));
-
-test("insights render consumes agent sections and writes final report", () =>
+test("insights render consumes insights-content.json and writes escaped HTML", () =>
   withTempHomes(async (dir, env) => {
     writeSession(env, {
       workDir: join(dir, "project"),
       sessionId: "s1",
       turns: [{ user: "build report" }, { user: "verify report" }]
     });
-    await collectInsightsInput({ env });
+    await prepareInsightsEvidence({ env });
     const paths = insightsPaths(env);
     writeFileSync(
-      paths.sectionsPath,
+      paths.contentPath,
       JSON.stringify({
         schema_version: 1,
-        at_a_glance: {
-          whats_working: "<strong>escaped</strong>",
-          whats_hindering: "Few issues",
-          quick_wins: "Use skills",
-          ambitious_workflows: "Use Ralph"
-        },
-        project_areas: { areas: [{ name: "Project", session_count: 1, description: "Work area" }] },
-        interaction_style: { narrative: "Direct", key_pattern: "Iterative" },
-        what_works: { intro: "Good", impressive_workflows: [{ title: "Review", description: "Works" }] },
-        friction_analysis: { intro: "Low", categories: [] },
-        suggestions: { kimi_instructions_additions: [], features_to_try: [], usage_patterns: [] },
-        skill_opportunities: [
+        language: "zh-CN",
+        facets: [
           {
-            name: "review discipline",
-            trigger: "after code changes",
-            why: "Repeated review work should be reusable.",
-            evidence: ["review sessions appeared"],
-            proposed_scope: "Update omk-review guidance.",
-            risk: "Could be too broad.",
-            example_prompt: "/skill:omk-review",
-            recommended_action: "update_skill"
+            session_id: "s1",
+            goal_categories: { review: 1 },
+            outcome: "mostly_achieved",
+            user_satisfaction_counts: { satisfied: 1 },
+            friction_counts: { tool_error: 1 }
           }
         ],
-        on_the_horizon: { intro: "More", opportunities: [] },
-        fun_ending: { headline: "Done", detail: "Clean" }
+        sections: {
+          at_a_glance: {
+            whats_working: "<strong>escaped</strong>",
+            whats_hindering: "工具错误需要被记录。",
+            quick_wins: "把重复偏好写入 AGENTS.md。",
+            ambitious_workflows: "用 insights 反推 skill。"
+          },
+          project_areas: { areas: [{ name: "OMK", session_count: 1, description: "插件工作流。" }] },
+          interaction_style: { narrative: "你倾向于持续校准。", key_pattern: "先质疑，再收敛。" },
+          what_works: { intro: "审查驱动有效。", impressive_workflows: [] },
+          friction_analysis: { intro: "主要摩擦是工具失败。", categories: [] },
+          suggestions: { kimi_instructions_additions: [], features_to_try: [], usage_patterns: [] },
+          on_the_horizon: { intro: "", opportunities: [] },
+          skill_opportunities: { candidates: [] }
+        },
+        quality: { evidence_strength: "mixed", omitted_sections: ["on_the_horizon"], data_limits: [] }
       }),
       "utf8"
     );
 
-    const report = await renderInsightsReport({ env, sectionsPath: paths.sectionsPath });
-    const html = readFileSync(report.reportHtmlPath, "utf8");
-    const json = JSON.parse(readFileSync(report.reportJsonPath, "utf8"));
+    const report = await renderInsightsReport({ env });
+    const html = readFileSync(paths.reportHtmlPath, "utf8");
+    const json = JSON.parse(readFileSync(paths.reportJsonPath, "utf8"));
 
     assert.equal(report.mode, "narrative");
-    assert.equal(json.sections.fun_ending.headline, "Done");
-    assert.equal(json.sections.skill_opportunities[0].recommended_action, "update_skill");
+    assert.equal(json.facets_summary.total, 1);
     assert.match(html, /&lt;strong&gt;escaped&lt;\/strong&gt;/);
-    assert.match(html, /Skill Opportunities/);
-    assert.match(html, /review discipline/);
-  }));
-
-test("insights render rejects non-json sections with a clear error", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [{ user: "build report" }, { user: "verify report" }]
-    });
-    await collectInsightsInput({ env });
-    const paths = insightsPaths(env);
-    writeFileSync(paths.sectionsPath, "not-json", "utf8");
-
-    await assert.rejects(() => renderInsightsReport({ env, sectionsPath: paths.sectionsPath }), /Invalid insights sections JSON/);
-    assert.equal(report.mode, "metrics-only");
-  }));
-
-test("insights collect writes bounded input prompt and draft", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [
-        { user: "add feature real task one with a short request" },
-        { user: "/skill:insights" },
-        { user: "real task two", tools: [{ id: "t1", name: "Shell", arguments: { command: "false" }, error: "Exit Code 1" }] }
-      ]
-    });
-
-    const input = await collectInsightsInput({ env, limit: 20, facetLimit: 10 });
-    const paths = insightsPaths(env);
-    const prompt = readFileSync(paths.promptPath, "utf8");
-    const payload = JSON.parse(readFileSync(paths.inputPath, "utf8"));
-
-    assert.equal(existsSync(paths.inputPath), true);
-    assert.equal(existsSync(paths.promptPath), true);
-    assert.equal(existsSync(paths.draftHtmlPath), true);
-    assert.equal(payload.schema_version, 1);
-    assert.equal(payload.render.sections_path, paths.sectionsPath);
-    assert.equal(payload.preferred_output_language.code, "en");
-    assert.equal(payload.workflow_signals.prompt_intents.implementation, 1);
-    assert.equal(typeof payload.recommendation_context.omk[0], "string");
-    assert.match(prompt, /Required JSON Schema/);
-    assert.match(prompt, /Write the narrative sections in natural English/);
-    assert.match(prompt, /skill_opportunities/);
-    assert.match(prompt, /Write every section in the required JSON object/);
-    assert.match(prompt, /omk insights render --sections/);
-    assert.equal(payload.session_summaries.length, 1);
-    assert.equal(payload.session_summaries[0].user_messages, 2);
-    assert.doesNotMatch(JSON.stringify(payload), /TurnBegin/);
-    assert.equal(input.scannedSessions, 1);
-  }));
-
-test("insights collect prefers the user's Chinese language for narrative output", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [
-        { user: "请你 review 一下这个方案，有无可以优化的地方" },
-        { user: "继续修复这个问题" }
-      ]
-    });
-
-    const input = await collectInsightsInput({ env });
-    const paths = insightsPaths(env);
-    const payload = JSON.parse(readFileSync(paths.inputPath, "utf8"));
-    const prompt = readFileSync(paths.promptPath, "utf8");
-
-    assert.equal(input.preferred_output_language.code, "zh");
-    assert.equal(payload.preferred_output_language.code, "zh");
-    assert.match(prompt, /natural Simplified Chinese/);
-    assert.equal(payload.session_summaries[0].prompt_language, "mixed Chinese-English");
-    assert.equal(payload.session_summaries[0].workflow_tags.includes("review"), true);
-  }));
-
-test("insights render consumes agent sections and writes final report", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [{ user: "build report" }, { user: "verify report" }]
-    });
-    await collectInsightsInput({ env });
-    const paths = insightsPaths(env);
-    writeFileSync(
-      paths.sectionsPath,
-      JSON.stringify({
-        schema_version: 1,
-        at_a_glance: {
-          whats_working: "<strong>escaped</strong>",
-          whats_hindering: "Few issues",
-          quick_wins: "Use skills",
-          ambitious_workflows: "Use Ralph"
-        },
-        project_areas: { areas: [{ name: "Project", session_count: 1, description: "Work area" }] },
-        interaction_style: { narrative: "Direct", key_pattern: "Iterative" },
-        what_works: { intro: "Good", impressive_workflows: [{ title: "Review", description: "Works" }] },
-        friction_analysis: { intro: "Low", categories: [] },
-        suggestions: { kimi_instructions_additions: [], features_to_try: [], usage_patterns: [] },
-        skill_opportunities: [
-          {
-            name: "review discipline",
-            trigger: "after code changes",
-            why: "Repeated review work should be reusable.",
-            evidence: ["review sessions appeared"],
-            proposed_scope: "Update omk-review guidance.",
-            risk: "Could be too broad.",
-            example_prompt: "/skill:omk-review",
-            recommended_action: "update_skill"
-          }
-        ],
-        on_the_horizon: { intro: "More", opportunities: [] },
-        fun_ending: { headline: "Done", detail: "Clean" }
-      }),
-      "utf8"
-    );
-
-    const report = await renderInsightsReport({ env, sectionsPath: paths.sectionsPath });
-    const html = readFileSync(report.reportHtmlPath, "utf8");
-    const json = JSON.parse(readFileSync(report.reportJsonPath, "utf8"));
-
-    assert.equal(report.mode, "narrative");
-    assert.equal(json.sections.fun_ending.headline, "Done");
-    assert.equal(json.sections.skill_opportunities[0].recommended_action, "update_skill");
-    assert.match(html, /&lt;strong&gt;escaped&lt;\/strong&gt;/);
-    assert.match(html, /Skill Opportunities/);
-    assert.match(html, /review discipline/);
-  }));
-
-test("insights render rejects non-json sections with a clear error", () =>
-  withTempHomes(async (dir, env) => {
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [{ user: "build report" }, { user: "verify report" }]
-    });
-    await collectInsightsInput({ env });
-    const paths = insightsPaths(env);
-    writeFileSync(paths.sectionsPath, "not-json", "utf8");
-
-    await assert.rejects(() => renderInsightsReport({ env, sectionsPath: paths.sectionsPath }), /Invalid insights sections JSON/);
+    assert.match(html, /At a Glance/);
+    assert.doesNotMatch(html, /在地平线上|Skill 机会|brand-mark|prompt-card/);
   }));
 
 test("insights turn filtering keeps other turns in the same session", () =>
@@ -378,7 +212,7 @@ test("insights turn filtering keeps other turns in the same session", () =>
     const { wirePath } = writeSession(env, {
       workDir: join(dir, "project"),
       sessionId: "s1",
-      turns: [{ user: "real task one" }, { user: "/skill:insights --no-llm" }, { user: "real task two" }]
+      turns: [{ user: "real task one" }, { user: "/skill:insights" }, { user: "real task two" }]
     });
     const session = scanSessions(env)[0];
     const turns = readWireTurns(wirePath);
@@ -391,18 +225,21 @@ test("insights turn filtering keeps other turns in the same session", () =>
     assert.equal(meta.isMetaSession, false);
   }));
 
-test("insights skill frontmatter is discoverable and uses v2 workflow", () => {
+test("insights skill uses prepare content render workflow", () => {
   const text = readFileSync(join(import.meta.dir, "..", "skills", "insights", "SKILL.md"), "utf8");
 
   assert.match(text, /^---\nname: insights\n/m);
-  assert.match(text, /omk insights collect/);
-  assert.match(text, /omk insights render --sections/);
-  assert.match(text, /skill_opportunities/);
-  assert.match(text, /Ask first/);
-  assert.doesNotMatch(text, /kimi --print`\s*$/m);
+  assert.match(text, /omk insights prepare/);
+  assert.match(text, /evidence-pack\.md/);
+  assert.match(text, /insights-content\.json/);
+  assert.match(text, /omk insights render/);
+  assert.match(text, /At a Glance.*last/s);
+  assert.doesNotMatch(text, /omk insights collect/);
+  assert.doesNotMatch(text, /insights-prompt\.md/);
+  assert.doesNotMatch(text, /--no-llm/);
 });
 
-test("insights cli supports collect render paths and metrics commands", () =>
+test("insights cli exposes only prepare render paths", () =>
   withTempHomes(async (dir, env) => {
     const lines = [];
     writeSession(env, {
@@ -411,53 +248,34 @@ test("insights cli supports collect render paths and metrics commands", () =>
       turns: [{ user: "build report" }, { user: "verify report" }]
     });
 
-    await runInsightsCli(["collect", "--limit", "20"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /insights collect complete/);
-
-    const paths = insightsPaths(env);
-    writeFileSync(paths.sectionsPath, JSON.stringify({ schema_version: 1 }), "utf8");
-    await runInsightsCli(["render", "--sections", paths.sectionsPath], {
-      env,
-      stdout: (line) => lines.push(line)
-    });
-    assert.match(lines.at(-1), /insights render complete/);
+    await runInsightsCli(["prepare", "--limit", "20"], { env, stdout: (line) => lines.push(line) });
+    assert.match(lines.at(-1), /evidence pack ready/);
+    assert.match(lines.at(-1), /Evidence pack:/);
 
     await runInsightsCli(["paths"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /render_command:/);
+    assert.match(lines.at(-1), /evidence_pack:/);
+    assert.doesNotMatch(lines.at(-1), /no-llm|collect|sections_json/);
 
-    await runInsightsCli(["--no-llm"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /metrics report complete/);
+    assert.match(await helpText(), /omk insights prepare/);
+    assert.doesNotMatch(await helpText(), /--no-llm|collect|metrics-only/);
+    await assert.rejects(() => runInsightsCli(["--no-llm"], { env, stdout: () => {} }), /Unknown insights option: --no-llm/);
   }));
-  assert.match(text, /omk insights collect/);
-  assert.match(text, /omk insights render --sections/);
-  assert.match(text, /skill_opportunities/);
-  assert.match(text, /Ask first/);
-  assert.doesNotMatch(text, /kimi --print`\s*$/m);
-});
 
-test("insights cli supports collect render paths and metrics commands", () =>
-  withTempHomes(async (dir, env) => {
-    const lines = [];
-    writeSession(env, {
-      workDir: join(dir, "project"),
-      sessionId: "s1",
-      turns: [{ user: "build report" }, { user: "verify report" }]
-    });
+test("doctor detects stale installed insights skill", () =>
+  withTempHomes((dir, env) => {
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "Run `omk insights collect` then read insights-prompt.md", "utf8");
 
-    await runInsightsCli(["collect", "--limit", "20"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /insights collect complete/);
+    const result = doctor();
 
-    const paths = insightsPaths(env);
-    writeFileSync(paths.sectionsPath, JSON.stringify({ schema_version: 1 }), "utf8");
-    await runInsightsCli(["render", "--sections", paths.sectionsPath], {
-      env,
-      stdout: (line) => lines.push(line)
-    });
-    assert.match(lines.at(-1), /insights render complete/);
-
-    await runInsightsCli(["paths"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /render_command:/);
-
-    await runInsightsCli(["--no-llm"], { env, stdout: (line) => lines.push(line) });
-    assert.match(lines.at(-1), /metrics report complete/);
+    assert.equal(result.skills.insights_installed, true);
+    assert.equal(result.skills.insights_current, false);
+    assert.equal(result.skills.insights_stale, true);
   }));
+
+async function helpText() {
+  const lines = [];
+  await runInsightsCli(["--help"], { stdout: (line) => lines.push(line) });
+  return lines.join("\n");
+}

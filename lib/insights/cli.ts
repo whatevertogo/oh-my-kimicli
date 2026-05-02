@@ -1,9 +1,4 @@
-import {
-  collectInsightsInput,
-  generateMetricsOnlyReport,
-  insightsPaths,
-  renderInsightsReport
-} from "./report.ts";
+import { insightsPaths, prepareInsightsEvidence, renderInsightsReport } from "./report.ts";
 
 export async function runInsightsCli(args, { env = process.env, stdout = console.log } = {}) {
   if (args.includes("--help") || args.includes("-h")) {
@@ -11,19 +6,17 @@ export async function runInsightsCli(args, { env = process.env, stdout = console
     return null;
   }
 
-  const command = args[0] && !args[0].startsWith("-") ? args[0] : "metrics";
-  const rest = command === "metrics" ? args : args.slice(1);
+  const command = args[0] && !args[0].startsWith("-") ? args[0] : "prepare";
+  const rest = command === "prepare" ? (args[0]?.startsWith("-") ? args : args.slice(1)) : args.slice(1);
 
-  if (command === "collect") {
-    const options = parseInsightsArgs(rest, env);
-    const input = await collectInsightsInput(options);
-    stdout(formatCollectSummary(input, options));
-    return input;
+  if (command === "prepare") {
+    const evidence = await prepareInsightsEvidence(parsePrepareArgs(rest, env));
+    stdout(formatPrepareSummary(evidence));
+    return evidence;
   }
 
   if (command === "render") {
-    const options = parseRenderArgs(rest, env);
-    const report = await renderInsightsReport(options);
+    const report = await renderInsightsReport({ env });
     stdout(formatRenderSummary(report));
     return report;
   }
@@ -34,30 +27,15 @@ export async function runInsightsCli(args, { env = process.env, stdout = console
     return paths;
   }
 
-  if (command !== "metrics") {
-    throw new Error(`Unknown insights command: ${command}\n\n${insightsHelp()}`);
-  }
-
-  const options = parseInsightsArgs(rest, env);
-  const report = await generateMetricsOnlyReport(options);
-  if (options.json) {
-    stdout(JSON.stringify(report, null, 2));
-    return report;
-  }
-  stdout(formatInsightsSummary(report));
-  return report;
+  throw new Error(`Unknown insights command: ${command}\n\n${insightsHelp()}`);
 }
 
-export function parseInsightsArgs(args, env = process.env) {
-  const options = { env, force: false, limit: 200, facetLimit: 50, noLlm: true, json: false };
+export function parsePrepareArgs(args, env = process.env) {
+  const options = { env, force: false, limit: 500, facetLimit: 50 };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--force") {
       options.force = true;
-    } else if (arg === "--no-llm") {
-      options.noLlm = true;
-    } else if (arg === "--json") {
-      options.json = true;
     } else if (arg === "--limit") {
       options.limit = Number(args[++i]);
     } else if (arg.startsWith("--limit=")) {
@@ -73,83 +51,57 @@ export function parseInsightsArgs(args, env = process.env) {
   return options;
 }
 
-export function formatInsightsSummary(report) {
+function formatPrepareSummary(evidence) {
   return [
-    "oh-my-kimicli insights metrics report complete.",
-    `HTML report: ${report.reportHtmlPath}`,
-    `JSON report: ${report.reportJsonPath}`,
-    `Sessions scanned: ${report.scannedSessions}`,
-    `Sessions analyzed: ${report.analyzedSessions}`,
-    "Narrative sections were skipped.",
-    "For a narrative report inside KimiCLI, run /skill:insights."
-  ].join("\n");
-}
-
-function parseRenderArgs(args, env) {
-  const options = { env, sectionsPath: "" };
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i];
-    if (arg === "--sections") {
-      options.sectionsPath = args[++i];
-    } else if (arg.startsWith("--sections=")) {
-      options.sectionsPath = arg.slice("--sections=".length);
-    } else {
-      throw new Error(`Unknown insights render option: ${arg}\n\n${insightsHelp()}`);
-    }
-  }
-  if (!options.sectionsPath) {
-    options.sectionsPath = insightsPaths(env).sectionsPath;
-  }
-  return options;
-}
-
-function formatCollectSummary(input) {
-  return [
-    "oh-my-kimicli insights collect complete.",
-    `Input JSON: ${input.paths.inputPath}`,
-    `Prompt: ${input.paths.promptPath}`,
-    `Draft HTML: ${input.paths.draftHtmlPath}`,
-    `Sections JSON: ${input.paths.sectionsPath}`,
-    `Render command: ${input.paths.renderCommand}`,
-    `Sessions scanned: ${input.scannedSessions}`,
-    `Sessions analyzed: ${input.analyzedSessions}`
+    "oh-my-kimicli insights evidence pack ready.",
+    `Evidence pack: ${evidence.paths.evidence_markdown}`,
+    `Evidence JSON: ${evidence.paths.evidence_json}`,
+    `Content schema: ${evidence.paths.schema}`,
+    `Write content JSON: ${evidence.paths.content}`,
+    `Render command: omk insights render`,
+    `Target HTML: ${evidence.paths.report_html}`,
+    `Target JSON: ${evidence.paths.report_json}`,
+    `Sessions scanned: ${evidence.scannedSessions}`,
+    `Sessions analyzed: ${evidence.analyzedSessions}`,
+    `Evidence sessions: ${evidence.session_evidence.length}`
   ].join("\n");
 }
 
 function formatRenderSummary(report) {
   return [
-    "oh-my-kimicli insights render complete.",
+    "oh-my-kimicli insights report rendered.",
     `HTML report: ${report.reportHtmlPath}`,
     `JSON report: ${report.reportJsonPath}`,
     `Sessions scanned: ${report.scannedSessions}`,
-    `Sessions analyzed: ${report.analyzedSessions}`
+    `Sessions analyzed: ${report.analyzedSessions}`,
+    `Facet sessions: ${report.facets_summary.total}`
   ].join("\n");
 }
 
 function formatPaths(paths) {
   return [
     `usage_data_dir: ${paths.usageDir}`,
-    `input_json: ${paths.inputPath}`,
-    `prompt: ${paths.promptPath}`,
-    `sections_json: ${paths.sectionsPath}`,
-    `draft_html: ${paths.draftHtmlPath}`,
+    `insights_dir: ${paths.insightsDir}`,
+    `evidence_pack: ${paths.evidenceMarkdownPath}`,
+    `evidence_json: ${paths.evidenceJsonPath}`,
+    `content_schema: ${paths.schemaPath}`,
+    `content_json: ${paths.contentPath}`,
     `report_html: ${paths.reportHtmlPath}`,
-    `report_json: ${paths.reportJsonPath}`,
-    `render_command: ${paths.renderCommand}`
+    `report_json: ${paths.reportJsonPath}`
   ].join("\n");
 }
 
 export function insightsHelp() {
   return `Usage:
-  omk insights [--no-llm] [--force] [--limit N] [--json]
-  omk insights collect [--force] [--limit N] [--facet-limit N]
-  omk insights render --sections <path>
+  omk insights prepare [--force] [--limit N] [--facet-limit N]
+  omk insights render
   omk insights paths
 
 Inside KimiCLI:
-  /skill:insights          Collect input, let the current agent write sections, then render
+  /skill:insights          prepare evidence -> write insights-content.json -> render
 
 Notes:
-  Bare 'omk insights' is metrics-only. It never starts nested kimi --print.
-  For a narrative report, use /skill:insights inside KimiCLI.`;
+  Bare 'omk insights' is an alias for 'omk insights prepare'.
+  There is no quick report. Narrative content comes from the current Kimi agent.
+  The external CLI never starts nested kimi --print.`;
 }

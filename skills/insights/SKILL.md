@@ -1,83 +1,64 @@
 ---
 name: insights
-description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, or an insights report.
+description: Generate an oh-my-kimicli usage insights report from KimiCLI sessions. Use when the user asks for usage insights, session analysis, work patterns, friction analysis, suggestions, skill opportunities, repeated-instruction analysis, or an insights report.
 ---
 
 # OMK Insights
 
-Use the OMK collector, write the narrative sections as the current Kimi agent, then ask OMK to render the report.
+Generate a Claude Code style usage report from KimiCLI session history.
 
-Do not manually inspect session logs unless the collector fails.
+OMK prepares a bounded evidence pack. The current Kimi agent writes structured insight content. OMK renders the final HTML and JSON.
 
-## Narrative Workflow
+## Workflow
 
-1. Treat user-supplied flags as arguments for collect when they are relevant.
-2. Run:
+1. Run:
 
-   `omk insights collect <args>`
+   `omk insights prepare <args>`
 
-3. Read the generated `insights-prompt.md` path from stdout.
-4. Follow that prompt exactly:
-   - read the bounded payload described by the prompt
-   - write strict JSON to the reported `insights-sections.json`
-   - use the schema in the prompt
-   - write prose in `preferred_output_language`
-   - ground suggestions in `workflow_signals`, `time_of_day`, `friction_details`, `user_instructions`, and `recommendation_context`
-5. Run the reported render command:
+2. Read the generated `evidence-pack.md`. Treat it as the source of truth.
 
-   `omk insights render --sections <insights-sections.json>`
+3. Write exactly one JSON object to the reported `insights-content.json` path.
 
-6. Final response includes only:
-   - HTML report path
-   - JSON report path
-   - sessions scanned/analyzed
-   - skipped data or sections, if any
-   - one short question asking whether to apply any `skill_opportunities` by creating/updating a skill, hook, or AGENTS.md instruction
+4. The JSON must include:
+   - `facets`
+   - `sections.at_a_glance`
+   - `sections.project_areas`
+   - `sections.interaction_style`
+   - `sections.what_works`
+   - `sections.friction_analysis`
+   - `sections.suggestions`
+   - `sections.on_the_horizon`
+   - `sections.skill_opportunities`
+   - `quality`
 
-## Boundaries
+5. Run:
 
-- Do not run bare `omk insights` for the narrative workflow.
-- Do not run `kimi --print`.
-- Do not scan `~/.kimi/sessions` manually.
-- Do not paste full raw transcripts into context.
-- Do not translate command names, paths, skill names, or product names.
-- Do not create or update skills from `skill_opportunities` during this skill run. Ask first.
-- If the prompt or payload is too large, suggest `omk insights --no-llm` or rerun collect with a smaller `--limit` / `--facet-limit`.
-1. Treat user-supplied flags as arguments for collect when they are relevant.
-2. Run:
-
-   `omk insights collect <args>`
-
-3. Read the generated `insights-prompt.md` path from stdout.
-4. Follow that prompt exactly:
-   - read the bounded payload described by the prompt
-   - write strict JSON to the reported `insights-sections.json`
-   - use the schema in the prompt
-   - write prose in `preferred_output_language`
-   - ground suggestions in `workflow_signals`, `time_of_day`, `friction_details`, `user_instructions`, and `recommendation_context`
-5. Run the reported render command:
-
-   `omk insights render --sections <insights-sections.json>`
+   `omk insights render`
 
 6. Final response includes only:
    - HTML report path
    - JSON report path
    - sessions scanned/analyzed
-   - skipped data or sections, if any
-   - one short question asking whether to apply any `skill_opportunities` by creating/updating a skill, hook, or AGENTS.md instruction
+   - evidence limits or weak sections
+   - one short question asking whether to create/update a skill, hook, or AGENTS.md instruction only when the report contains a concrete skill opportunity with action `create_skill`, `update_skill`, `add_hook`, or `add_agents_instruction`
+
+## Analysis Rules
+
+- Use the evidence pack content. Do not invent from generic instructions.
+- Extract facets first.
+- Generate section-level insights from facets.
+- Write `At a Glance` last.
+- Use second person when describing the user's working style.
+- Do not treat tool counts as insights by themselves.
+- Suggestions must reduce repeated work, lower failure rate, or preserve a stable user preference.
+- Leave arrays empty when evidence is weak.
+- Keep awkward translated headings in English.
 
 ## Boundaries
 
-- Do not run bare `omk insights` for the narrative workflow.
+- Do not run bare `omk insights` unless the user explicitly asks for the prepare alias.
+- Do not run removed quick-report flags.
 - Do not run `kimi --print`.
-- Do not scan `~/.kimi/sessions` manually.
-- Do not paste full raw transcripts into context.
-- Do not translate command names, paths, skill names, or product names.
-- Do not create or update skills from `skill_opportunities` during this skill run. Ask first.
-- If the prompt or payload is too large, suggest `omk insights --no-llm` or rerun collect with a smaller `--limit` / `--facet-limit`.
-
-## Examples
-
-- `/skill:insights` -> `omk insights collect`
-- `/skill:insights --limit 50` -> `omk insights collect --limit 50`
-- `/skill:insights 少花点 token` -> `omk insights collect --facet-limit 10`
+- Do not manually scan `~/.kimi/sessions`.
+- Do not write HTML yourself.
+- Do not create or update skills, hooks, or AGENTS.md during this report run. Ask first.

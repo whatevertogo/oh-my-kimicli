@@ -30,8 +30,8 @@ export function kimiPluginInstallDir(env = process.env) {
   return join(kimiPluginsDir(env), "oh-my-kimicli");
 }
 
-export function kimiUserSkillsDir() {
-  return join(homedir(), ".kimi", "skills");
+export function kimiUserSkillsDir(env = process.env) {
+  return env.KIMI_USER_SKILLS_DIR ? resolve(env.KIMI_USER_SKILLS_DIR) : join(homedir(), ".kimi", "skills");
 }
 
 export function omkHomeDir(env = process.env) {

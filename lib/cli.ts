@@ -45,13 +45,12 @@ Usage:
   omk uninstall           Remove managed hooks, plugin, and managed skills
   omk config              Create or normalize ~/.omk/config.json
   omk doctor              Print machine-readable installation diagnostics
-  omk insights            Generate a metrics-only KimiCLI usage report
-  omk insights collect    Collect bounded input for /skill:insights
-  omk insights render     Render a narrative report from sections JSON
+  omk insights prepare    Generate evidence pack for /skill:insights
+  omk insights render     Render report from insights-content.json
   omk insights paths      Print insights artifact paths
   omk help                Show this help
 
 Inside KimiCLI:
-  /skill:insights         Collect input, write sections as current agent, then render
+  /skill:insights         prepare evidence -> write content -> render
 `);
 }
