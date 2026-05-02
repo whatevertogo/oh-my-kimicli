@@ -175,6 +175,38 @@ test("hook initializes OMK Ralph state from omk-ralph skill prompt", () => {
   }
 });
 
+test("hook initializes Ralph-backed Ultrawork state from ultrawork skill prompt", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    const result = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "UserPromptSubmit",
+        prompt: "/skill:ultrawork review the project end-to-end",
+        cwd: dir
+      })
+    );
+
+    assert.equal(result.status, 0);
+    const state = JSON.parse(readFileSync(join(dir, ".omk", "state", "ralph-state.json"), "utf8"));
+    assert.equal(state.workflow, "ralph");
+    assert.equal(state.source_skill, "ultrawork");
+    assert.equal(state.status, "active");
+    assert.equal(state.task, "review the project end-to-end");
+    assert.equal(state.completion_promise, "OMK_RALPH_DONE");
+    assert.equal(state.iteration, 0);
+    assert.equal(state.max_iterations, -1);
+    assert.equal(state.skill_selection_status, "not_evaluated");
+    assert.deepEqual(state.selected_skills, []);
+    assert.equal(state.plan_required, "auto");
+    assert.equal(state.plan_status, "pending");
+    assert.equal(state.review_required, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("hook continues while OMK Ralph state is active", () => {
   const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
   try {
@@ -214,6 +246,91 @@ test("hook continues while OMK Ralph state is active", () => {
     const state = JSON.parse(readFileSync(join(dir, ".omk", "state", "ralph-state.json"), "utf8"));
     assert.equal(state.iteration, 1);
     assert.equal(state.status, "active");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hook reminds Ralph-backed Ultrawork to select skills and plan large work", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    mkdirSync(join(dir, ".omk", "state"), { recursive: true });
+    writeFileSync(
+      join(dir, ".omk", "state", "ralph-state.json"),
+      JSON.stringify({
+        version: 1,
+        workflow: "ralph",
+        source_skill: "ultrawork",
+        status: "active",
+        task: "refactor the plugin workflow",
+        completion_promise: "OMK_RALPH_DONE",
+        iteration: 0,
+        max_iterations: -1,
+        skill_selection_status: "pending",
+        selected_skills: [],
+        plan_status: "pending",
+        reason: "starting",
+        evidence: []
+      }),
+      "utf8"
+    );
+
+    const result = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "Stop",
+        cwd: dir
+      })
+    );
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /Source skill:\s+ultrawork/);
+    assert.match(result.stderr, /Capability Selection Pass/);
+    assert.match(result.stderr, /EnterPlanMode/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hook allows Ralph-backed Ultrawork to finish without ceremonial skill selection", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    mkdirSync(join(dir, ".omk", "state"), { recursive: true });
+    writeFileSync(
+      join(dir, ".omk", "state", "ralph-state.json"),
+      JSON.stringify({
+        version: 1,
+        workflow: "ralph",
+        source_skill: "ultrawork",
+        status: "done",
+        task: "review the project",
+        completion_promise: "OMK_RALPH_DONE",
+        iteration: 0,
+        max_iterations: -1,
+        skill_selection_status: "not_evaluated",
+        reason: "task completed",
+        evidence: ["claimed complete"]
+      }),
+      "utf8"
+    );
+
+    const result = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "Stop",
+        cwd: dir
+      })
+    );
+
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /OMK Ralph task is complete/);
+
+    const state = JSON.parse(readFileSync(join(dir, ".omk", "state", "ralph-state.json"), "utf8"));
+    assert.equal(state.status, "done");
+    assert.equal(state.skill_selection_status, "not_evaluated");
+    assert.equal(state.end_prompt_sent, true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
