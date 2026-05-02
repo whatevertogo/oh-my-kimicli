@@ -33,6 +33,11 @@ export async function runHook() {
   );
 
   if (eventName === "UserPromptSubmit") {
+    const replacementPrompt = normalizeUserPrompt(input);
+    if (replacementPrompt) {
+      initializeRalphState({ ...input, prompt: replacementPrompt });
+      return allowWithReplacement(replacementPrompt);
+    }
     initializeRalphState(input);
     return allow();
   }
@@ -268,23 +273,48 @@ function ralphEndPrompt(cwd, state) {
 
 function initializeRalphState(input) {
   const prompt = String(input.prompt || "").trim();
-  const match = /^\/skill:omk-ralph(?:\s+([\s\S]*))?$/.exec(prompt);
+  const match = /^\/skill:(omk-ralph|ultrawork)(?:\s+([\s\S]*))?$/.exec(prompt);
   if (!match || !input.cwd) {
     return;
   }
-  const task = (match[1] || "the current user task").trim();
-  writeRalphState(input.cwd, {
+  const sourceSkill = match[1];
+  const task = (match[2] || "the current user task").trim();
+  const state = {
     version: 1,
     workflow: "ralph",
+    source_skill: sourceSkill,
     status: "active",
     task,
     completion_promise: DEFAULT_RALPH_COMPLETION_PROMISE,
     iteration: 0,
     max_iterations: DEFAULT_RALPH_MAX_ITERATIONS,
-    reason: "omk-ralph started",
+    reason: `${sourceSkill} started`,
     evidence: [],
     updated_at: new Date().toISOString()
+  };
+  if (sourceSkill === "ultrawork") {
+    Object.assign(state, {
+      phase: "starting",
+      skill_selection_status: "not_evaluated",
+      selected_skills: [],
+      plan_required: "auto",
+      plan_status: "pending",
+      review_required: true,
+      evidence: ["initialized by /skill:ultrawork"]
+    });
+  }
+  writeRalphState(input.cwd, {
+    ...state
   });
+}
+
+function normalizeUserPrompt(input) {
+  const prompt = String(input.prompt || "");
+  if (prompt.slice(0, 3).toLowerCase() !== "ulw") {
+    return "";
+  }
+  const task = prompt.slice(3).replace(/^[\s:：-]+/, "").trim();
+  return task ? `/skill:ultrawork ${task}` : "/skill:ultrawork";
 }
 
 function readRalphState(cwd) {
@@ -366,7 +396,11 @@ function writeRalphState(cwd, state) {
 function renderRalphPrompt(prompt, state) {
   return prompt
     .replace(/\{\{STATUS\}\}/g, String(state.status || "active"))
+    .replace(/\{\{SOURCE_SKILL\}\}/g, String(state.source_skill || "omk-ralph"))
     .replace(/\{\{TASK\}\}/g, String(state.task || "the current user task"))
+    .replace(/\{\{SKILL_SELECTION_STATUS\}\}/g, String(state.skill_selection_status || "n/a"))
+    .replace(/\{\{PLAN_STATUS\}\}/g, String(state.plan_status || "n/a"))
+    .replace(/\{\{SELECTED_SKILLS\}\}/g, renderSelectedSkills(state.selected_skills))
     .replace(
       /\{\{COMPLETION_PROMISE\}\}/g,
       String(state.completion_promise || DEFAULT_RALPH_COMPLETION_PROMISE)
@@ -376,6 +410,23 @@ function renderRalphPrompt(prompt, state) {
     .replace(/\{\{REASON\}\}/g, String(state.reason || "task is still active"))
     .replace(/\{\{ENDED_AT\}\}/g, String(state.ended_at || "not ended yet"))
     .replace(/\{\{EVIDENCE\}\}/g, renderEvidence(state.evidence));
+}
+
+function renderSelectedSkills(skills) {
+  if (!Array.isArray(skills) || skills.length === 0) {
+    return "- none recorded";
+  }
+  return skills
+    .slice(-12)
+    .map((skill) => {
+      if (typeof skill === "string") {
+        return `- ${trim(skill, 180)}`;
+      }
+      const name = trim(String(skill?.name || "unknown"), 80);
+      const reason = trim(String(skill?.reason || "selected"), 180);
+      return `- ${name}: ${reason}`;
+    })
+    .join("\n");
 }
 
 function renderEvidence(evidence) {
@@ -473,6 +524,19 @@ function readStdinJson() {
 
 function allow() {
   // Hooks are synchronous by convention; setting exitCode lets Bun flush stderr before exit.
+  process.exitCode = 0;
+}
+
+function allowWithReplacement(prompt) {
+  process.stdout.write(
+    `${JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        replacementPrompt: prompt
+      }
+    })}\n`
+  );
+  // Hooks are synchronous by convention; setting exitCode lets Bun flush stdout before exit.
   process.exitCode = 0;
 }
 
