@@ -1,12 +1,32 @@
 {
   "name": "oh-my-kimicli",
   "version": "0.1.0",
-  "description": "External hook, skill, and plugin orchestration for Kimi Code CLI.",
+  "description": "Personal workflow orchestration for Kimi Code CLI: skills, hooks, persistent continuation, review gates, and usage insights.",
   "type": "module",
   "bin": {
-    "omk": "./bin/omk.ts",
-    "oh-my-kimicli": "./bin/omk.ts"
+    "omk": "./bin/omk.js",
+    "oh-my-kimicli": "./bin/omk.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whatevertogo/oh-my-kimicli.git"
+  },
+  "homepage": "https://github.com/whatevertogo/oh-my-kimicli#readme",
+  "bugs": {
+    "url": "https://github.com/whatevertogo/oh-my-kimicli/issues"
+  },
+  "keywords": [
+    "kimi",
+    "kimi-cli",
+    "kimi-code",
+    "agent",
+    "cli",
+    "skills",
+    "hooks",
+    "workflow",
+    "code-review",
+    "insights"
+  ],
   "files": [
     "bin",
     "lib",
@@ -14,7 +34,9 @@
     "prompts",
     "skills",
     "test",
-    "README.md"
+    "README.md",
+    "README_EN.md",
+    "LICENSE"
   ],
   "scripts": {
     "build:bun": "bun build bin/omk.ts --target=bun --outdir dist/bundle",
