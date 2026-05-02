@@ -1,7 +1,10 @@
 export function generateHtmlReport(report) {
-  const data = report.aggregated || {};
+  const data = report.aggregated || {} || {};
   const sections = report.sections || {};
+  const data = report.aggregated || {};
+  const sections = report.sections || {} || {};
   return `<!doctype html>
+<html lang="${escapeHtml(htmlLang(data))}">
 <html lang="${escapeHtml(htmlLang(data))}">
 <head>
   <meta charset="utf-8">
@@ -46,12 +49,22 @@ export function generateHtmlReport(report) {
     ${stat("Files", data.totalFilesModified)}
     ${stat("Active days", data.daysActive)}
     ${stat("Language", data.userLanguage?.label || "unknown")}
+    ${stat("Language", data.userLanguage?.label || "unknown")}
   </div>
   ${atAGlance(sections.at_a_glance)}
   <div class="grid">
     ${chartSection("Goals", data.goalCategories)}
     ${chartSection("Tools", data.toolCounts)}
     ${chartSection("Languages", data.languages)}
+    ${chartSection("Session Types", data.sessionTypes)}
+  </div>
+  ${projectAreas(sections.project_areas)}
+  ${interactionStyle(sections.interaction_style)}
+  <div class="grid">
+    ${responseTime(data)}
+    ${chartSection("Tool Errors", data.toolErrorCategories)}
+    ${chartSection("Time of Day", data.timeOfDay)}
+    ${chartSection("Prompt Intents", data.workflowSignals?.prompt_intents)}
     ${chartSection("Session Types", data.sessionTypes)}
   </div>
   ${projectAreas(sections.project_areas)}
@@ -69,6 +82,13 @@ export function generateHtmlReport(report) {
   ${suggestions(sections.suggestions)}
   ${horizon(sections.on_the_horizon)}
   ${funEnding(sections.fun_ending)}
+  ${workflowSignals(data.workflowSignals)}
+  ${whatWorks(sections.what_works)}
+  ${frictionAnalysis(sections.friction_analysis)}
+  ${skillOpportunities(sections.skill_opportunities)}
+  ${suggestions(sections.suggestions)}
+  ${horizon(sections.on_the_horizon)}
+  ${funEnding(sections.fun_ending)}
 </main>
 </body>
 </html>
@@ -79,6 +99,122 @@ function stat(label, value) {
   return `<div class="stat"><span class="muted">${escapeHtml(label)}</span><strong>${escapeHtml(formatNumber(value))}</strong></div>`;
 }
 
+function atAGlance(section = {}) {
+  return `<section><h2>At a Glance</h2>
+    ${paragraph("What's working", section.whats_working)}
+    ${paragraph("What's hindering", section.whats_hindering)}
+    ${paragraph("Quick wins", section.quick_wins)}
+    ${paragraph("Ambitious workflows", section.ambitious_workflows)}
+  </section>`;
+}
+
+function projectAreas(section = {}) {
+  const areas = Array.isArray(section.areas) ? section.areas : [];
+  const body = areas.length
+    ? areas
+        .map(
+          (area) =>
+            `<div class="item"><h3>${escapeHtml(area.name)} <span class="muted">(${escapeHtml(formatNumber(area.session_count))} sessions)</span></h3><p>${escapeHtml(area.description)}</p></div>`
+        )
+        .join("")
+    : `<p class="muted">No project area narrative available.</p>`;
+  return `<section><h2>Project Areas</h2>${body}</section>`;
+}
+
+function interactionStyle(section = {}) {
+  return `<section><h2>Interaction Style</h2>
+    <p>${escapeHtml(section.narrative || "Unavailable.")}</p>
+    <p><strong>Key pattern:</strong> ${escapeHtml(section.key_pattern || "Unavailable.")}</p>
+  </section>`;
+}
+
+function whatWorks(section = {}) {
+  const workflows = Array.isArray(section.impressive_workflows) ? section.impressive_workflows : [];
+  return `<section><h2>What Works</h2>
+    <p>${escapeHtml(section.intro || "Unavailable.")}</p>
+    ${itemList(workflows, (item) => `<h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p>`)}
+  </section>`;
+}
+
+function frictionAnalysis(section = {}) {
+  const categories = Array.isArray(section.categories) ? section.categories : [];
+  return `<section><h2>Friction</h2>
+    <p>${escapeHtml(section.intro || "Unavailable.")}</p>
+    ${itemList(
+      categories,
+      (item) =>
+        `<h3>${escapeHtml(item.category)}</h3><p>${escapeHtml(item.description)}</p>${bulletList(item.examples)}`
+    )}
+  </section>`;
+}
+
+function suggestions(section = {}) {
+  return `<section><h2>Suggestions</h2>
+    <h3>Kimi instructions additions</h3>
+    ${itemList(section.kimi_instructions_additions, (item) => `<p><strong>${escapeHtml(item.addition)}</strong></p><p>${escapeHtml(item.why)}</p>${copyBlock(item.prompt_scaffold)}`)}
+    <h3>Features to try</h3>
+    ${itemList(section.features_to_try, (item) => `<p><strong>${escapeHtml(item.feature)}</strong> - ${escapeHtml(item.one_liner)}</p><p>${escapeHtml(item.why_for_you)}</p>${copyBlock(item.example_code)}`)}
+    <h3>Usage patterns</h3>
+    ${itemList(section.usage_patterns, (item) => `<p><strong>${escapeHtml(item.title)}</strong> - ${escapeHtml(item.suggestion)}</p><p>${escapeHtml(item.detail)}</p>${copyBlock(item.copyable_prompt)}`)}
+  </section>`;
+}
+
+function skillOpportunities(items = []) {
+  const opportunities = Array.isArray(items) ? items : [];
+  return `<section><h2>Skill Opportunities</h2>
+    <p class="muted">Candidates are suggestions only. Apply them after confirming the scope.</p>
+    ${itemList(
+      opportunities,
+      (item) =>
+        `<h3>${escapeHtml(item.name)} <span class="muted">(${escapeHtml(item.recommended_action || "no_action")})</span></h3>
+        <p><strong>Trigger:</strong> ${escapeHtml(item.trigger)}</p>
+        <p><strong>Why:</strong> ${escapeHtml(item.why)}</p>
+        ${bulletList(item.evidence)}
+        <p><strong>Scope:</strong> ${escapeHtml(item.proposed_scope)}</p>
+        <p><strong>Risk:</strong> ${escapeHtml(item.risk)}</p>
+        ${copyBlock(item.example_prompt)}`
+    )}
+  </section>`;
+}
+
+function horizon(section = {}) {
+  return `<section><h2>On The Horizon</h2>
+    <p>${escapeHtml(section.intro || "Unavailable.")}</p>
+    ${itemList(section.opportunities, (item) => `<h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.whats_possible)}</p><p>${escapeHtml(item.how_to_try)}</p>${copyBlock(item.copyable_prompt)}`)}
+  </section>`;
+}
+
+function funEnding(section = {}) {
+  return `<section><h2>Fun Ending</h2><h3>${escapeHtml(section.headline || "Unavailable.")}</h3><p>${escapeHtml(section.detail || "")}</p></section>`;
+}
+
+function responseTime(data) {
+  return `<section><h2>Response Time</h2>
+    <p><strong>Average:</strong> ${escapeHtml(formatSeconds(data.averageResponseSeconds))}</p>
+    <p><strong>Median:</strong> ${escapeHtml(formatSeconds(data.medianResponseSeconds))}</p>
+    <p><strong>Multi-session usage:</strong> ${data.multiSessionUsage?.detected ? `Detected in ${escapeHtml(formatNumber(data.multiSessionUsage.windows))} window(s)` : "Not detected"}</p>
+  </section>`;
+}
+
+function workflowSignals(signals = {}) {
+  const rows = [
+    ["Subagent sessions", signals.sessions_with_subagents],
+    ["MCP sessions", signals.sessions_with_mcp],
+    ["Web sessions", signals.sessions_with_web],
+    ["Tool-error sessions", signals.sessions_with_tool_errors],
+    ["High-iteration sessions", signals.high_iteration_sessions],
+    ["Git commit sessions", signals.git_commit_sessions],
+    ["Average files modified", signals.average_files_modified]
+  ];
+  return `<section><h2>Workflow Signals</h2>
+    ${rows
+      .map(([label, value]) => `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(formatNumber(value || 0))}</p>`)
+      .join("")}
+  </section>`;
+}
+
+function paragraph(label, body) {
+  return `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(body || "Unavailable.")}</p>`;
 function atAGlance(section = {}) {
   return `<section><h2>At a Glance</h2>
     ${paragraph("What's working", section.whats_working)}
@@ -236,6 +372,19 @@ function escapeHtml(value) {
 function formatNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toLocaleString() : String(value ?? "");
+}
+
+function formatSeconds(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? `${Math.round(number)}s` : "n/a";
+}
+
+function labelize(value) {
+  return String(value || "unknown").replace(/_/g, " ");
+}
+
+function htmlLang(data) {
+  return data.userLanguage?.code === "zh" ? "zh-CN" : "en";
 }
 
 function formatSeconds(value) {
