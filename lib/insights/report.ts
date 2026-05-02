@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readConfig } from "../config.ts";
 import { kimiShareDir, omkUsageDataDir } from "../paths.ts";
+import { redactJson } from "../redact.ts";
 import { aggregateData } from "./aggregate.ts";
 import { loadCached, saveCached } from "./cache.ts";
 import { generateHtmlReport } from "./html.ts";
@@ -43,14 +45,17 @@ export async function prepareInsightsEvidence(options = {}) {
   mkdirSync(paths.insightsDir, { recursive: true });
 
   const { liteSessions, metas, sessionInputs, aggregated } = buildAggregatedData(options);
-  const evidence = buildEvidencePack({
-    env,
-    paths,
-    scannedSessions: liteSessions.length,
-    sessionInputs,
-    aggregated,
-    options
-  });
+  const evidence = redactJson(
+    buildEvidencePack({
+      env,
+      paths,
+      scannedSessions: liteSessions.length,
+      sessionInputs,
+      aggregated,
+      options
+    }),
+    readConfig(env).config.privacy
+  );
 
   writeFileSync(paths.evidenceJsonPath, `${JSON.stringify(evidence, null, 2)}\n`, {
     encoding: "utf8",
@@ -299,6 +304,7 @@ function normalizeInsightsContent(value) {
   if (!isObject(value)) {
     throw new Error("insights content must be a JSON object");
   }
+  validateInsightsContent(value);
   const sections = isObject(value.sections) ? value.sections : {};
   return {
     schema_version: 1,
@@ -316,6 +322,48 @@ function normalizeInsightsContent(value) {
     },
     quality: object(value.quality)
   };
+}
+
+function validateInsightsContent(value) {
+  const errors = [];
+  if (value.schema_version !== 1) {
+    errors.push("schema_version must be 1");
+  }
+  if (!text(value.language, "")) {
+    errors.push("language is required");
+  }
+  if (!Array.isArray(value.facets)) {
+    errors.push("facets must be an array");
+  }
+  const sections = isObject(value.sections) ? value.sections : {};
+  for (const [sectionName, keys] of Object.entries({
+    at_a_glance: ["whats_working", "whats_hindering", "quick_wins", "ambitious_workflows"],
+    project_areas: ["areas"],
+    interaction_style: ["narrative", "key_pattern"],
+    what_works: ["intro", "impressive_workflows"],
+    friction_analysis: ["intro", "categories"],
+    suggestions: ["kimi_instructions_additions", "features_to_try", "usage_patterns"],
+    on_the_horizon: ["intro", "opportunities"],
+    skill_opportunities: ["candidates"]
+  })) {
+    const section = sections[sectionName];
+    if (!isObject(section)) {
+      errors.push(`sections.${sectionName} must be an object`);
+      continue;
+    }
+    for (const key of keys) {
+      if (!(key in section)) {
+        errors.push(`sections.${sectionName}.${key} is required`);
+      }
+    }
+  }
+  const quality = isObject(value.quality) ? value.quality : {};
+  if (!["strong", "mixed", "weak"].includes(String(quality.evidence_strength || ""))) {
+    errors.push("quality.evidence_strength must be strong|mixed|weak");
+  }
+  if (errors.length > 0) {
+    throw new Error(`insights-content.json invalid:\n- ${errors.join("\n- ")}`);
+  }
 }
 
 function insightsContentSchema() {
@@ -427,17 +475,33 @@ function buildFrictionDetails(metas) {
 function buildUserInstructions(metas) {
   const counts = new Map();
   for (const meta of metas.filter((item) => !item.isMetaSession && !isInsightsSession(item))) {
-    const prompt = truncate(meta.firstPrompt, 180).trim();
-    if (!prompt) {
-      continue;
+    for (const prompt of instructionCandidates(meta)) {
+      const key = prompt.toLowerCase();
+      counts.set(key, { instruction: prompt, count: (counts.get(key)?.count || 0) + 1 });
     }
-    const key = prompt.toLowerCase();
-    counts.set(key, { instruction: prompt, count: (counts.get(key)?.count || 0) + 1 });
   }
   return Array.from(counts.values())
     .filter((item) => item.count > 1)
     .sort((a, b) => b.count - a.count)
     .slice(0, DEFAULT_LIMITS.max_user_instruction_candidates);
+}
+
+function instructionCandidates(meta) {
+  const prompts = Array.isArray(meta.userInputs) && meta.userInputs.length ? meta.userInputs : [meta.firstPrompt];
+  const patterns = [
+    /用中文/,
+    /不要.*(?:废话|解释太多)/,
+    /直接.*(?:做|改|执行)/,
+    /先.*(?:看代码|读文件|检查)/,
+    /继续/,
+    /不要.*问/,
+    /给我.*(?:建议|方案|代码)/
+  ];
+  return prompts
+    .map((prompt) => truncate(prompt, 180).trim())
+    .filter(Boolean)
+    .filter((prompt) => prompt.length <= 180 || patterns.some((pattern) => pattern.test(prompt)))
+    .filter((prompt) => patterns.some((pattern) => pattern.test(prompt)) || prompt.split(/\s+/).length <= 12);
 }
 
 function buildLanguageProfile(metas) {

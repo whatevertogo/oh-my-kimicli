@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { readKimiSessionState } from "./kimi-session.ts";
+import { readConfig } from "./config.ts";
+import { redactText } from "./redact.ts";
 import {
   appendEvent,
   clearConditionalPrompt,
@@ -205,6 +207,7 @@ function unsafeToolReason(input) {
     /git\s+reset\s+--hard/,
     /git\s+clean\s+-[^\n]*[xfd]/,
     /\brm\s+(?=[^\n;&|]*-[^\n;&|]*r)(?=[^\n;&|]*-[^\n;&|]*f)[^\n;&|]*\s\/\S*/i,
+    /\brm\s+(?=[^\n;&|]*-[^\n;&|]*r)(?=[^\n;&|]*-[^\n;&|]*f)[^\n;&|]*(?:\s+\.|\s+\.\.|\s+\*|\s+~|\s+\$home)(?:\s|$)/i,
     /remove-item\b[\s\S]*-(?:recurse|r)\b[\s\S]*-force\b/i,
     /remove-item\b[\s\S]*-force\b[\s\S]*-(?:recurse|r)\b/i,
     /\b(?:rd|rmdir)\s+\/s\b[\s\S]*\/q\b/i,
@@ -309,11 +312,12 @@ function initializeRalphState(input) {
 }
 
 function normalizeUserPrompt(input) {
-  const prompt = String(input.prompt || "");
-  if (prompt.slice(0, 3).toLowerCase() !== "ulw") {
+  const prompt = String(input.prompt || "").trim();
+  const match = /^ulw(?:$|[\s:：-]+([\s\S]*)?)$/i.exec(prompt);
+  if (!match) {
     return "";
   }
-  const task = prompt.slice(3).replace(/^[\s:：-]+/, "").trim();
+  const task = String(match[1] || "").trim();
   return task ? `/skill:ultrawork ${task}` : "/skill:ultrawork";
 }
 
@@ -385,12 +389,11 @@ function normalizeStatus(value) {
 
 function writeRalphState(cwd, state) {
   const stateDir = join(resolve(cwd), ".omk", "state");
+  const path = join(stateDir, "ralph-state.json");
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
   mkdirSync(stateDir, { recursive: true });
-  writeFileSync(
-    join(stateDir, "ralph-state.json"),
-    `${JSON.stringify(state, null, 2)}\n`,
-    "utf8"
-  );
+  writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  renameSync(tmp, path);
 }
 
 function renderRalphPrompt(prompt, state) {
@@ -486,11 +489,12 @@ function gitAbsoluteDir(cwd) {
 }
 
 function summarizeInput(input) {
+  const privacy = readConfig().config.privacy;
   return {
     tool_name: input.tool_name,
     agent_name: input.agent_name,
-    prompt: trim(input.prompt, 300),
-    cwd: input.cwd
+    prompt: privacy.record_hook_prompts ? redactText(trim(input.prompt, 300), privacy) : undefined,
+    cwd: privacy.record_cwd ? redactText(input.cwd, privacy) : undefined
   };
 }
 
@@ -508,7 +512,7 @@ function readStdinJson() {
   }
   const raw = readFileSync(0, "utf8").trim();
   if (!raw) {
-    return {};
+    return null;
   }
   try {
     return JSON.parse(raw);

@@ -7,23 +7,11 @@ Original task:
 Source skill:
 {{SOURCE_SKILL}}
 
-Source skill:
-{{SOURCE_SKILL}}
-
 Completion promise:
 `{{COMPLETION_PROMISE}}`
 
 Current continuation:
 {{ITERATION}} / {{MAX_ITERATIONS}}
-
-Skill selection:
-{{SKILL_SELECTION_STATUS}}
-
-Selected skills:
-{{SELECTED_SKILLS}}
-
-Plan status:
-{{PLAN_STATUS}}
 
 Skill selection:
 {{SKILL_SELECTION_STATUS}}
@@ -89,21 +77,6 @@ Blocked:
   "completion_promise": "{{COMPLETION_PROMISE}}",
   "reason": "needs user approval before deleting files",
   "evidence": ["requested operation would remove tracked files"]
-}
-```
-
-Ultrawork skill selection:
-
-```json
-{
-  "workflow": "ralph",
-  "source_skill": "ultrawork",
-  "status": "active",
-  "skill_selection_status": "done",
-  "selected_skills": [
-    { "name": "<skill-name>", "reason": "<why this skill changes execution>" }
-  ],
-  "reason": "selected useful skills; continuing"
 }
 ```
 

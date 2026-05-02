@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { queueConditionalPrompt, readState } from "../lib/state.ts";
+import { eventsFile, queueConditionalPrompt, readState } from "../lib/state.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const omkBin = join(packageRoot, "bin", "omk.ts");
@@ -33,6 +33,31 @@ test("hook ignores invalid JSON instead of failing closed", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stderr, /ignored invalid hook input/);
+});
+
+test("ralph continue prompt has no duplicated section labels", () => {
+  const text = readFileSync(join(packageRoot, "prompts", "ralph", "continue.md"), "utf8");
+
+  assert.equal((text.match(/^Source skill:/gm) || []).length, 1);
+  assert.equal((text.match(/^Skill selection:/gm) || []).length, 1);
+  assert.equal((text.match(/^Selected skills:/gm) || []).length, 1);
+  assert.equal((text.match(/^Plan status:/gm) || []).length, 1);
+  assert.equal((text.match(/^Ultrawork skill selection:/gm) || []).length, 1);
+});
+
+test("hook allows empty stdin without touching cwd", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    spawnSync("git", ["init"], { cwd: dir, encoding: "utf8" });
+
+    const result = runHookIn(dir, "");
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, "");
+    assert.equal(readFileSync(join(dir, ".git", "info", "exclude"), "utf8").includes(".omk/"), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("hook blocks obvious destructive shell commands", () => {
@@ -89,6 +114,74 @@ test("hook blocks rm -rf against absolute paths", () => {
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /blocked a destructive shell command/);
+});
+
+test("hook blocks rm -rf against shell wildcards and current directories", () => {
+  for (const command of ["rm -rf .", "rm -rf ..", "rm -rf *", "rm -rf ~", "rm -rf $HOME"]) {
+    const result = runHook(
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "PreToolUse",
+        tool_name: "Shell",
+        tool_input: { command }
+      })
+    );
+
+    assert.equal(result.status, 2, command);
+    assert.match(result.stderr, /blocked a destructive shell command/);
+  }
+});
+
+test("hook only expands explicit ulw shorthand", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    const shorthand = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "UserPromptSubmit",
+        prompt: "ulw: fix tests",
+        cwd: dir
+      })
+    );
+    const ordinaryWord = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "UserPromptSubmit",
+        prompt: "ulwizard should stay as user text",
+        cwd: dir
+      })
+    );
+
+    assert.equal(shorthand.status, 0);
+    assert.match(shorthand.stdout, /\/skill:ultrawork fix tests/);
+    assert.equal(ordinaryWord.status, 0);
+    assert.equal(ordinaryWord.stdout, "");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hook event log does not record prompts by default", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    const result = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "UserPromptSubmit",
+        prompt: "secret sk-1234567890abcdef should not be logged",
+        cwd: dir
+      })
+    );
+
+    assert.equal(result.status, 0);
+    const log = readFileSync(eventsFile("s1", { KIMI_SHARE_DIR: dir }), "utf8");
+    assert.doesNotMatch(log, /sk-1234567890abcdef|secret/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("hook keeps conditional prompts when tool success confirmation is still pending", () => {

@@ -51,11 +51,13 @@ export function doctor() {
   const skills = kimiUserSkillsDir();
   const omkConfig = readConfig();
   const configText = existsSync(config) ? readFileSync(config, "utf8") : "";
+  const hookCommand = extractManagedHookCommand(configText);
   const installedInsightsSkill = join(skills, "insights", "SKILL.md");
   const insightsSkillText = existsSync(installedInsightsSkill)
     ? readFileSync(installedInsightsSkill, "utf8")
     : "";
   const insightsSkillCurrent = isCurrentInsightsSkill(insightsSkillText);
+  const skillStatus = inspectSkills(skills);
   return {
     share_dir: omkDataDir().replace(/[\\/]oh-my-kimicli$/, ""),
     data_dir: omkDataDir(),
@@ -66,10 +68,15 @@ export function doctor() {
     config_file: config,
     config_exists: existsSync(config),
     hooks_installed: configText.includes(HOOK_BLOCK_START),
+    hook_command: hookCommand,
+    hook_command_resolvable: hookCommand ? commandLooksResolvable(hookCommand) : false,
     plugin_dir: plugin,
     plugin_installed: existsSync(join(plugin, "plugin.json")),
     skills_dir: skills,
-    installed_skills: listInstalledSkills(skills),
+    installed_skills: Object.entries(skillStatus)
+      .filter(([, status]) => status.managed)
+      .map(([name]) => name),
+    skill_status: skillStatus,
     skills: {
       insights_installed: existsSync(installedInsightsSkill),
       insights_current: insightsSkillCurrent,
@@ -87,9 +94,9 @@ export function formatDoctorSummary(data = doctor()) {
     `omk_config_file: ${data.omk_config_file} (${data.omk_config_exists ? "exists" : "missing"}, ${data.omk_config_valid ? "valid" : "invalid"})`,
     `features.pet: ${data.omk_config.features.pet ? "enabled" : "disabled"}`,
     `config_file: ${data.config_file} (${data.config_exists ? "exists" : "missing"})`,
-    `hooks: ${data.hooks_installed ? "installed" : "missing"}`,
+    `hooks: ${data.hooks_installed ? "installed" : "missing"}${data.hook_command ? ` (${data.hook_command_resolvable ? "resolvable" : "not resolvable"})` : ""}`,
     `plugin: ${data.plugin_installed ? "installed" : "missing"}`,
-    `skills: ${data.installed_skills.length ? data.installed_skills.join(", ") : "none"}`,
+    `skills: ${formatSkillSummary(data.skill_status)}`,
     `insights skill: ${data.skills.insights_installed ? (data.skills.insights_current ? "current" : "stale") : "missing"}`,
     `usage_data_dir: ${data.usage_data_dir} (${data.usage_data_writable ? "writable" : "not writable"})`
   ].join("\n");
@@ -137,15 +144,26 @@ function installSkills(force) {
 }
 
 function canReplaceManagedSkill(skillDir, skillName) {
+  return isManagedSkill(skillDir, skillName) && skillIsUnmodified(skillDir);
+}
+
+function isManagedSkill(skillDir, skillName) {
   const markerPath = join(skillDir, SKILL_MARKER_FILE);
   if (!existsSync(markerPath)) {
     return false;
   }
   try {
     const marker = JSON.parse(readFileSync(markerPath, "utf8"));
-    return marker.manager === "oh-my-kimicli" &&
-      marker.skill === skillName &&
-      marker.content_hash === skillContentHash(skillDir);
+    return marker.manager === "oh-my-kimicli" && marker.skill === skillName;
+  } catch {
+    return false;
+  }
+}
+
+function skillIsUnmodified(skillDir) {
+  try {
+    const marker = JSON.parse(readFileSync(join(skillDir, SKILL_MARKER_FILE), "utf8"));
+    return marker.content_hash === skillContentHash(skillDir);
   } catch {
     return false;
   }
@@ -233,14 +251,18 @@ function removeManagedSkills() {
       continue;
     }
     const dest = join(destRoot, entry.name);
-    if (existsSync(dest) && canReplaceManagedSkill(dest, entry.name)) {
-      rmSync(dest, { recursive: true, force: true });
+    if (!existsSync(dest) || !isManagedSkill(dest, entry.name)) {
+      continue;
     }
+    if (!skillIsUnmodified(dest)) {
+      backupSkill(destRoot, entry.name);
+    }
+    rmSync(dest, { recursive: true, force: true });
   }
 }
 
 function buildHooksBlock() {
-  const command = "omk hook";
+  const command = `${shellQuote(process.execPath)} ${shellQuote(join(packageRoot, "bin", "omk.ts"))} hook`;
   const events = [
     "UserPromptSubmit",
     "Stop",
@@ -255,7 +277,7 @@ function buildHooksBlock() {
         "[[hooks]]",
         `event = "${event}"`,
         'matcher = ""',
-        `command = "${command}"`,
+        `command = ${JSON.stringify(command)}`,
         "timeout = 30"
       ].join("\n")
     )
@@ -290,6 +312,75 @@ function listInstalledSkills(skillsDir) {
     .filter((entry) => entry.isDirectory() && managedSkillNames.has(entry.name))
     .map((entry) => basename(entry.name))
     .sort();
+}
+
+function inspectSkills(skillsDir) {
+  const sourceRoot = join(packageRoot, "skills");
+  const result = {};
+  for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const source = join(sourceRoot, entry.name);
+    const dest = join(skillsDir, entry.name);
+    const exists = existsSync(dest);
+    const managed = exists && isManagedSkill(dest, entry.name);
+    const modified = managed && !skillIsUnmodified(dest);
+    const current = managed && skillContentHash(dest) === skillContentHash(source);
+    result[entry.name] = {
+      exists,
+      managed,
+      current,
+      modified,
+      reason: skillStatusReason({ exists, managed, current, modified })
+    };
+  }
+  return result;
+}
+
+function skillStatusReason({ exists, managed, current, modified }) {
+  if (!exists) {
+    return "missing";
+  }
+  if (!managed) {
+    return "same-name user skill without OMK marker";
+  }
+  if (modified) {
+    return "OMK-managed skill edited locally";
+  }
+  if (!current) {
+    return "OMK-managed skill differs from package source";
+  }
+  return "current";
+}
+
+function formatSkillSummary(status) {
+  const entries = Object.entries(status || {});
+  if (entries.length === 0) {
+    return "none";
+  }
+  return entries.map(([name, item]) => `${name}:${item.reason}`).join(", ");
+}
+
+function extractManagedHookCommand(configText) {
+  const start = configText.indexOf(HOOK_BLOCK_START);
+  const end = configText.indexOf(HOOK_BLOCK_END);
+  if (start < 0 || end < start) {
+    return "";
+  }
+  const block = configText.slice(start, end);
+  const match = /^\s*command\s*=\s*"((?:\\"|[^"])*)"/m.exec(block);
+  return match ? match[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\") : "";
+}
+
+function commandLooksResolvable(command) {
+  const match = /^"([^"]+)"|^(\S+)/.exec(command);
+  const executable = match ? match[1] || match[2] : "";
+  return executable ? existsSync(executable) || executable === "omk" : false;
+}
+
+function shellQuote(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
 function escapeRegex(value) {

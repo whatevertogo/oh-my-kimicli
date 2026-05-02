@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { omkSessionsDir } from "./paths.ts";
 
@@ -32,7 +32,7 @@ export function readState(sessionId, env = process.env) {
 
 export function writeState(sessionId, state, env = process.env) {
   mkdirSync(sessionDir(sessionId, env), { recursive: true });
-  writeFileSync(stateFile(sessionId, env), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  atomicWriteJson(stateFile(sessionId, env), state);
 }
 
 export function appendEvent(sessionId, event, env = process.env) {
@@ -44,9 +44,12 @@ export function appendEvent(sessionId, event, env = process.env) {
   writeFileSync(
     eventsFile(sessionId, env),
     `${JSON.stringify({ at: state.updated_at, ...event })}\n`,
-    { encoding: "utf8", flag: "a" }
+    { encoding: "utf8", flag: "a", mode: 0o600 }
   );
-  trimEventLog(eventsFile(sessionId, env), maxEventLogLines(env));
+  const maxLines = maxEventLogLines(env);
+  if (state.events % 100 === 0 || state.events > maxLines) {
+    trimEventLog(eventsFile(sessionId, env), maxLines);
+  }
 }
 
 export function consumeNextPrompt(sessionId, env = process.env) {
@@ -171,8 +174,17 @@ function trimEventLog(file, maxLines) {
     if (lines.length <= maxLines) {
       return;
     }
-    writeFileSync(file, `${lines.slice(-maxLines).join("\n")}\n`, "utf8");
+    writeFileSync(file, `${lines.slice(-maxLines).join("\n")}\n`, {
+      encoding: "utf8",
+      mode: 0o600
+    });
   } catch {
     // Event logs are diagnostic only; never fail the hook because rotation failed.
   }
+}
+
+function atomicWriteJson(file, data) {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  renameSync(tmp, file);
 }

@@ -10,7 +10,8 @@ import { insightsPaths, prepareInsightsEvidence, renderInsightsReport } from "..
 import { buildSessionMeta } from "../lib/insights/meta.ts";
 import { scanSessions } from "../lib/insights/scan.ts";
 import { readWireTurns } from "../lib/insights/wire.ts";
-import { doctor, setup } from "../lib/setup.ts";
+import { cacheFile } from "../lib/insights/cache.ts";
+import { doctor, setup, uninstall } from "../lib/setup.ts";
 
 async function withTempHomes(fn) {
   const dir = mkdtempSync(join(tmpdir(), "omk-insights-"));
@@ -153,6 +154,23 @@ test("insights prepare prefers Chinese when session evidence is Chinese", () =>
     assert.match(readFileSync(insightsPaths(env).evidenceMarkdownPath, "utf8"), /natural Simplified Chinese/);
   }));
 
+test("insights prepare redacts common secret shapes from evidence files", () =>
+  withTempHomes(async (dir, env) => {
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [{ user: "use OPENAI_API_KEY=sk-1234567890abcdef for this test" }]
+    });
+
+    const evidence = await prepareInsightsEvidence({ env });
+    const markdown = readFileSync(insightsPaths(env).evidenceMarkdownPath, "utf8");
+    const json = readFileSync(insightsPaths(env).evidenceJsonPath, "utf8");
+
+    assert.match(evidence.session_evidence[0].first_prompt, /<redacted/);
+    assert.doesNotMatch(markdown, /sk-1234567890abcdef/);
+    assert.doesNotMatch(json, /sk-1234567890abcdef/);
+  }));
+
 test("insights render consumes insights-content.json and writes escaped HTML", () =>
   withTempHomes(async (dir, env) => {
     writeSession(env, {
@@ -207,6 +225,30 @@ test("insights render consumes insights-content.json and writes escaped HTML", (
     assert.doesNotMatch(html, /在地平线上|Skill 机会|brand-mark|prompt-card/);
   }));
 
+test("insights render rejects malformed content instead of producing an empty report", () =>
+  withTempHomes(async (dir, env) => {
+    writeSession(env, {
+      workDir: join(dir, "project"),
+      sessionId: "s1",
+      turns: [{ user: "build report" }]
+    });
+    await prepareInsightsEvidence({ env });
+    const paths = insightsPaths(env);
+    writeFileSync(
+      paths.contentPath,
+      JSON.stringify({
+        schema_version: 1,
+        language: "zh-CN",
+        facets: [],
+        sections: { at_a_glance: {} },
+        quality: { evidence_strength: "mixed" }
+      }),
+      "utf8"
+    );
+
+    await assert.rejects(() => renderInsightsReport({ env }), /sections\.at_a_glance\.whats_working is required/);
+  }));
+
 test("insights turn filtering keeps other turns in the same session", () =>
   withTempHomes((dir, env) => {
     const { wirePath } = writeSession(env, {
@@ -224,6 +266,14 @@ test("insights turn filtering keeps other turns in the same session", () =>
     assert.equal(meta.firstPrompt, "real task one");
     assert.equal(meta.isMetaSession, false);
   }));
+
+test("insights cache key includes work directory hash", () => {
+  const env = { OMK_HOME: "C:\\tmp\\omk" };
+  const first = cacheFile("session-meta", { workDirHash: "aaa", sessionId: "same" }, env);
+  const second = cacheFile("session-meta", { workDirHash: "bbb", sessionId: "same" }, env);
+
+  assert.notEqual(first, second);
+});
 
 test("insights skill uses prepare content render workflow", () => {
   const text = readFileSync(join(import.meta.dir, "..", "skills", "insights", "SKILL.md"), "utf8");
@@ -272,6 +322,8 @@ test("doctor detects stale installed insights skill", () =>
     assert.equal(result.skills.insights_installed, true);
     assert.equal(result.skills.insights_current, false);
     assert.equal(result.skills.insights_stale, true);
+    assert.equal(result.skill_status.insights.managed, false);
+    assert.equal(result.skill_status.insights.reason, "same-name user skill without OMK marker");
   }));
 
 test("setup force skips same-name skills without an OMK marker", () =>
@@ -311,6 +363,32 @@ test("setup force backs up and replaces unmodified OMK-managed skills", () =>
     assert.match(backupText, /omk insights prepare/);
     assert.match(currentText, /omk insights prepare/);
     assert.equal(existsSync(join(skillDir, ".omk-managed.json")), true);
+  }));
+
+test("uninstall keeps same-name skills without an OMK marker", () =>
+  withTempHomes((dir, env) => {
+    setup();
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+    rmSync(skillDir, { recursive: true, force: true });
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, "SKILL.md"), "user owned insights skill", "utf8");
+
+    uninstall();
+
+    assert.equal(readFileSync(join(skillDir, "SKILL.md"), "utf8"), "user owned insights skill");
+    assert.equal(existsSync(join(env.KIMI_USER_SKILLS_DIR, ".omk-backups")), false);
+  }));
+
+test("uninstall backs up and removes edited OMK-managed skills", () =>
+  withTempHomes((dir, env) => {
+    setup();
+    const skillDir = join(env.KIMI_USER_SKILLS_DIR, "insights");
+    writeFileSync(join(skillDir, "SKILL.md"), "user edited managed insights skill", "utf8");
+
+    uninstall();
+
+    assert.equal(existsSync(skillDir), false);
+    assert.equal(findBackedUpSkill(env, "insights"), "user edited managed insights skill");
   }));
 
 async function helpText() {

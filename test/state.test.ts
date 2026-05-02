@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "bun:test";
@@ -74,4 +74,18 @@ test("event logs keep only the configured number of recent lines", () =>
     assert.equal(lines.length, 3);
     assert.equal(JSON.parse(lines[0]).type, "two");
     assert.equal(JSON.parse(lines[2]).type, "four");
+  }));
+
+test("state and event files are private on platforms that support modes", () =>
+  withTempShare((env) => {
+    if (process.platform === "win32") {
+      return;
+    }
+    queueNextPrompt("s1", "continue now", "test", env);
+
+    const stateMode = statSync(stateFile("s1", env)).mode & 0o777;
+    const eventsMode = statSync(eventsFile("s1", env)).mode & 0o777;
+
+    assert.equal(stateMode & 0o077, 0);
+    assert.equal(eventsMode & 0o077, 0);
   }));

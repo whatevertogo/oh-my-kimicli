@@ -39,6 +39,7 @@ export type SessionMeta = {
   endTime: string;
   durationMinutes: number;
   firstPrompt: string;
+  userInputs: string[];
   userMessageCount: number;
   assistantStepCount: number;
   toolCounts: Record<string, number>;

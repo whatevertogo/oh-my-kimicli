@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "bun:test";
@@ -53,6 +53,8 @@ test("config preserves explicit pet setting and defaults unknown fields", () =>
     assert.equal(result.exists, true);
     assert.equal(result.valid, true);
     assert.equal(result.config.version, 1);
+    assert.equal(result.config.privacy.record_hook_prompts, false);
+    assert.equal(result.config.privacy.redact_secrets, true);
     assert.equal(result.config.features.pet, true);
   }));
 
@@ -67,4 +69,18 @@ test("invalid config falls back to defaults without throwing", () =>
     assert.equal(result.valid, false);
     assert.equal(result.config.features.pet, false);
     assert.match(result.error, /JSON/);
+  }));
+
+test("ensure config backs up invalid config before rewriting defaults", () =>
+  withTempOmkHome((env) => {
+    const path = omkConfigFile(env);
+    writeFileSync(path, "{bad-json", "utf8");
+
+    const result = ensureConfig(env);
+    const backups = readdirSync(env.OMK_HOME).filter((name) => name.includes(".invalid-"));
+
+    assert.equal(result.valid, true);
+    assert.equal(backups.length, 1);
+    assert.equal(readFileSync(join(env.OMK_HOME, backups[0]), "utf8"), "{bad-json");
+    assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), DEFAULT_CONFIG);
   }));

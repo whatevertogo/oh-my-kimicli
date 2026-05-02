@@ -1,6 +1,6 @@
 {
   "name": "@whatevertogo/oh-my-kimicli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Personal workflow orchestration for Kimi Code CLI: skills, hooks, persistent continuation, review gates, and usage insights.",
   "type": "module",
   "bin": {
@@ -36,19 +36,26 @@
     "test",
     "README.md",
     "README_EN.md",
-    "LICENSE"
+    "LICENSE",
+    "tsconfig.json"
   ],
   "scripts": {
     "build:bun": "bun build bin/omk.ts --target=bun --outdir dist/bundle",
-    "check": "bun test",
+    "check": "bun test && bun run typecheck",
     "clean": "bun -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/npm', { recursive: true }); mkdirSync('dist/bun', { recursive: true });\"",
     "pack:all": "bun run check && bun run clean && bun run pack:npm && bun run pack:bun && bun run build:bun",
     "pack:bun": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/bun', { recursive: true });\" && bun pm pack --destination dist/bun",
     "pack:npm": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/npm', { recursive: true });\" && npm pack --pack-destination dist/npm",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit"
   },
   "engines": {
     "bun": ">=1.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.1",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
   },
   "license": "MIT"
 }

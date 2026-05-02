@@ -13,7 +13,7 @@ export function cacheFingerprint(session) {
 }
 
 export function loadCached(kind, session, env = process.env) {
-  const path = cacheFile(kind, session.sessionId, env);
+  const path = cacheFile(kind, session, env);
   if (!existsSync(path)) {
     return null;
   }
@@ -35,7 +35,7 @@ export function loadCached(kind, session, env = process.env) {
 }
 
 export function saveCached(kind, session, data, env = process.env) {
-  const path = cacheFile(kind, session.sessionId, env);
+  const path = cacheFile(kind, session, env);
   mkdirSync(dirname(path), { recursive: true });
   const body = {
     schema_version: INSIGHTS_SCHEMA_VERSION,
@@ -45,8 +45,12 @@ export function saveCached(kind, session, data, env = process.env) {
   writeFileSync(path, `${JSON.stringify(body, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
-export function cacheFile(kind, sessionId, env = process.env) {
-  return join(omkUsageDataDir(env), kind, `${safeName(sessionId)}.json`);
+export function cacheFile(kind, session, env = process.env) {
+  const key =
+    typeof session === "string"
+      ? session
+      : `${session.workDirHash || "unknown"}-${session.sessionId || "unknown"}`;
+  return join(omkUsageDataDir(env), kind, `${safeName(key)}.json`);
 }
 
 function safeName(value) {

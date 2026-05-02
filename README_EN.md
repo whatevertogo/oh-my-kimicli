@@ -22,8 +22,17 @@ oh-my-kimicli does not replace KimiCLI. It adds a maintainable workflow layer ar
 
 ## Installation
 
+Recommended Bun install:
+
 ```sh
 bun install -g @whatevertogo/oh-my-kimicli
+omk setup
+```
+
+You can also install with npm, but running `omk` still requires Bun to be installed locally:
+
+```sh
+npm install -g @whatevertogo/oh-my-kimicli
 omk setup
 ```
 
@@ -105,8 +114,13 @@ omk setup              # Install plugin, skills, prompts, and hooks
 omk setup --force      # Back up then refresh same-name managed skills
 omk update             # Reinstall npm latest and refresh setup
 omk uninstall          # Remove managed hooks, plugin, and skills
+omk status             # Show project-local .omk workflow state
+omk cancel             # Mark the project-local Ralph workflow as blocked
+omk resume             # Mark the project-local Ralph workflow as active
+omk clean              # Remove project-local .omk/state workflow state
 omk config             # Create or normalize ~/.omk/config.json
 omk doctor             # Print machine-readable installation diagnostics
+omk review-target      # Print JSON describing the current code review target
 omk insights prepare   # Generate the evidence pack used by /skill:insights
 omk insights render    # Render HTML/JSON from insights-content.json
 omk insights paths     # Print insights artifact paths
@@ -309,13 +323,23 @@ Default:
 ```json
 {
   "version": 1,
+  "privacy": {
+    "record_hook_prompts": false,
+    "record_cwd": true,
+    "redact_secrets": true,
+    "redact_paths": false
+  },
+  "safety": {
+    "block_destructive_shell": true,
+    "warn_cleanup_dirs": true
+  },
   "features": {
     "pet": false
   }
 }
 ```
 
-`features.pet` is currently disabled by default and reserved for future use. Use `OMK_HOME` to move `~/.omk` for tests or isolated installs.
+Hook prompts are not recorded by default, and common secret shapes are redacted. `features.pet` is currently disabled by default and reserved for future use. Use `OMK_HOME` to move `~/.omk` for tests or isolated installs.
 
 ## Uninstalling
 
@@ -324,6 +348,8 @@ omk uninstall
 ```
 
 This removes oh-my-kimicli managed hooks, plugin files, and skills. It does not delete `~/.omk/usage-data` or project-local `./.omk` state directories.
+
+Uninstall uses the OMK marker as the ownership boundary. Same-name user skills without a marker are kept. Managed skills with a marker but local edits are backed up to `~/.kimi/skills/.omk-backups/<timestamp>/` before being removed from KimiCLI's active skills.
 
 To remove the global CLI:
 

@@ -64,6 +64,7 @@ export function buildSessionMeta(session, turns) {
   let usesWeb = false;
   let userInterruptions = 0;
   let firstPrompt = "";
+  const userInputs = [];
 
   for (const turn of visibleTurns) {
     if (!firstPrompt && turn.userInput) {
@@ -73,12 +74,14 @@ export function buildSessionMeta(session, turns) {
       if (event.type === "TurnBegin" && event.source === "root") {
         const text = textFromValue(event.payload.user_input);
         if (text) {
+          userInputs.push(text);
           userMessageCount += 1;
           recordUserTime(event.timestamp);
         }
       } else if (event.type === "SteerInput" && event.source === "root") {
         const text = textFromValue(event.payload.user_input);
         if (text) {
+          userInputs.push(text);
           userMessageCount += 1;
           recordUserTime(event.timestamp);
         }
@@ -153,6 +156,7 @@ export function buildSessionMeta(session, turns) {
     endTime: new Date(end * 1000).toISOString(),
     durationMinutes: Math.max(0, (end - start) / 60),
     firstPrompt,
+    userInputs,
     userMessageCount,
     assistantStepCount,
     toolCounts,
