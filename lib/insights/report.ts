@@ -95,7 +95,6 @@ export async function renderInsightsReport({ env = process.env }: AnyRecord = {}
     reportJsonPath: paths.reportJsonPath,
     scannedSessions: evidence.scanned_sessions,
     analyzedSessions: evidence.analyzed_sessions,
-    metrics: evidence.aggregate_metrics,
     aggregated: evidence.aggregate_metrics,
     facets_summary: summarizeFacets(content.facets),
     facets: content.facets,
@@ -187,6 +186,7 @@ function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggrega
     }
   }
 
+  const limited = limitAggregated(aggregated);
   return {
     schema_version: 2,
     generated_at: new Date().toISOString(),
@@ -204,13 +204,10 @@ function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggrega
       report_html: paths.reportHtmlPath,
       report_json: paths.reportJsonPath
     },
-    aggregate_metrics: limitAggregated(aggregated),
+    aggregate_metrics: limited,
     session_evidence: sessionEvidence,
-    friction_details: (aggregated.frictionDetails || []).slice(0, DEFAULT_LIMITS.max_friction_details),
-    repeated_user_instructions: (aggregated.userInstructionsToAssistant || []).slice(
-      0,
-      DEFAULT_LIMITS.max_user_instruction_candidates
-    ),
+    friction_details: limited.frictionDetails,
+    repeated_user_instructions: limited.userInstructionsToAssistant,
     feature_reference: recommendationContext(),
     meta_filtered: {
       insights_sessions_excluded: sessionInputs.filter(({ meta }) => isInsightsSession(meta)).length,

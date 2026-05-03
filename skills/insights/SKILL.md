@@ -13,23 +13,19 @@ OMK prepares a bounded evidence pack. The current Kimi agent writes structured i
 
 1. Run:
 
-   `omk insights prepare <args>`
+   `omk insights prepare [--days N] [--limit N] [--project <name>]`
+
+   Common usage: `omk insights prepare --days 30` to scan the last 30 days of sessions. Omit flags to accept OMK defaults. The prepare step produces `evidence-pack.md` and reports output paths in the evidence pack header.
 
 2. Read the generated `evidence-pack.md`. Treat it as the source of truth.
 
 3. Write exactly one JSON object to the reported `insights-content.json` path.
 
-4. The JSON must include:
-   - `facets`
-   - `sections.at_a_glance`
-   - `sections.project_areas`
-   - `sections.interaction_style`
-   - `sections.what_works`
-   - `sections.friction_analysis`
-   - `sections.suggestions`
-   - `sections.on_the_horizon`
-   - `sections.skill_opportunities`
-   - `quality`
+4. Write exactly one JSON object to the reported `insights-content.json` path. The evidence pack includes the full JSON schema under the `## Required JSON Schema` section — follow it exactly. Key rules:
+   - `facets` is an array of per-session facet objects, not a summary object
+   - Every section under `sections` has required keys listed in the schema; all must be present
+   - `quality.evidence_strength` must be one of `"strong"`, `"mixed"`, or `"weak"`
+   - Leave arrays empty when evidence is weak, but never omit a required key
 
 5. Run:
 

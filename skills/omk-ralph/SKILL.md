@@ -1,6 +1,6 @@
 ---
 name: omk-ralph
-description: Keep working under the oh-my-kimicli Stop-hook Ralph system until the user's task is complete, verified, or honestly blocked. Use when the user invokes /skill:omk-ralph, asks to keep going until done, or another OMK skill needs hook-based continuation. Do not use for one-shot Q&A or tasks that should stop after a normal response.
+description: Keep working autonomously under the oh-my-kimicli Stop-hook Ralph system until the task is complete, verified, or honestly blocked. Use when the user says keep going, don't stop until done, just finish it, complete this end-to-end, plow through it, or similar no-hand-holding language. Also used by ultrawork as its persistence layer. Do not use for one-shot Q&A, simple lookups, or tasks that should stop after a normal single response.
 ---
 
 # omk-ralph
@@ -45,6 +45,8 @@ Statuses:
 
 `max_iterations: -1` means unlimited. A positive value lets the hook mark the task blocked after
 the limit is exceeded.
+
+`completion_promise` is the phrase the hook uses to verify that the agent intentionally marked the state `"done"`. The hook looks for this exact string in the state file before finalizing. `OMK_RALPH_DONE` is the standard value. A caller (like ultrawork) may replace it with a more specific promise, but the hook requires the stop to include an agreed-upon token so a spurious `"done"` from a tool call does not end the session prematurely.
 
 ## Avoid Common Confusion
 
