@@ -10,11 +10,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node", "bun"]
   },
-  "include": [
-    "lib/config.ts",
-    "lib/paths.ts",
-    "lib/redact.ts",
-    "lib/review.ts",
-    "lib/workflow.ts"
-  ]
+  "include": ["lib/**/*.ts"]
 }

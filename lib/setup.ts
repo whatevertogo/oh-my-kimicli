@@ -29,6 +29,13 @@ import { ensureConfig, readConfig } from "./config.ts";
 const HOOK_BLOCK_START = "# >>> oh-my-kimicli hooks >>>";
 const HOOK_BLOCK_END = "# <<< oh-my-kimicli hooks <<<";
 const SKILL_MARKER_FILE = ".omk-managed.json";
+type SkillStatus = {
+  exists: boolean;
+  managed: boolean;
+  current: boolean;
+  modified: boolean;
+  reason: string;
+};
 
 export function setup({ force = false } = {}) {
   ensureConfig();
@@ -314,9 +321,9 @@ function listInstalledSkills(skillsDir) {
     .sort();
 }
 
-function inspectSkills(skillsDir) {
+function inspectSkills(skillsDir: string): Record<string, SkillStatus> {
   const sourceRoot = join(packageRoot, "skills");
-  const result = {};
+  const result: Record<string, SkillStatus> = {};
   for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) {
       continue;
@@ -338,7 +345,7 @@ function inspectSkills(skillsDir) {
   return result;
 }
 
-function skillStatusReason({ exists, managed, current, modified }) {
+function skillStatusReason({ exists, managed, current, modified }: Omit<SkillStatus, "reason">) {
   if (!exists) {
     return "missing";
   }
@@ -354,7 +361,7 @@ function skillStatusReason({ exists, managed, current, modified }) {
   return "current";
 }
 
-function formatSkillSummary(status) {
+function formatSkillSummary(status: Record<string, SkillStatus>) {
   const entries = Object.entries(status || {});
   if (entries.length === 0) {
     return "none";

@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { readKimiSessionState } from "./kimi-session.ts";
 import { readConfig } from "./config.ts";
 import { redactText } from "./redact.ts";
 import {
   appendEvent,
+  atomicWriteJson,
   clearConditionalPrompt,
   consumeNextPrompt,
   markConditionalPromptPostSuccess,
@@ -13,10 +14,12 @@ import {
   queueConditionalPrompt,
   readState
 } from "./state.ts";
-import { packageRoot } from "./paths.ts";
+import { packageRoot, projectOmkStateDir, projectRalphStateFile } from "./paths.ts";
 
 const DEFAULT_RALPH_COMPLETION_PROMISE = "OMK_RALPH_DONE";
 const DEFAULT_RALPH_MAX_ITERATIONS = -1;
+const CONDITIONAL_POST_SUCCESS_WAIT_MS = 3000;
+const CONDITIONAL_POST_SUCCESS_POLL_MS = 50;
 
 export async function runHook() {
   if (process.env.OMK_INSIGHTS_CHILD === "1") {
@@ -142,8 +145,12 @@ async function waitForConditionalPostSuccess(sessionId) {
   if (!candidate?.require_post_success || candidate.post_success) {
     return state;
   }
-  for (let i = 0; i < 6; i += 1) {
-    await sleep(50);
+  for (
+    let waitedMs = 0;
+    waitedMs < CONDITIONAL_POST_SUCCESS_WAIT_MS;
+    waitedMs += CONDITIONAL_POST_SUCCESS_POLL_MS
+  ) {
+    await sleep(CONDITIONAL_POST_SUCCESS_POLL_MS);
     state = readState(sessionId);
     if (!state.conditional_prompt?.require_post_success || state.conditional_prompt.post_success) {
       return state;
@@ -325,7 +332,7 @@ function readRalphState(cwd) {
   if (!cwd) {
     return null;
   }
-  const statePath = join(resolve(cwd), ".omk", "state", "ralph-state.json");
+  const statePath = projectRalphStateFile(cwd);
   if (!existsSync(statePath)) {
     return null;
   }
@@ -388,12 +395,10 @@ function normalizeStatus(value) {
 }
 
 function writeRalphState(cwd, state) {
-  const stateDir = join(resolve(cwd), ".omk", "state");
-  const path = join(stateDir, "ralph-state.json");
-  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  const stateDir = projectOmkStateDir(cwd);
+  const path = projectRalphStateFile(cwd);
   mkdirSync(stateDir, { recursive: true });
-  writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  renameSync(tmp, path);
+  atomicWriteJson(path, state);
 }
 
 function renderRalphPrompt(prompt, state) {

@@ -97,7 +97,7 @@ function scheduleWindowsUpdate(plan, env) {
       "-ExecutionPolicy",
       "Bypass",
       "-Command",
-      `Start-Process -FilePath powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File','${escapePowerShell(scriptPath)}') -WindowStyle Hidden`
+      `Start-Process -FilePath powershell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',${quotePowerShell(scriptPath)}) -WindowStyle Hidden`
     ],
     stdout: "pipe",
     stderr: "pipe"
@@ -108,13 +108,13 @@ function scheduleWindowsUpdate(plan, env) {
   return { scriptPath, logPath };
 }
 
-function windowsUpdateScript({ bunExe, plan, logPath }) {
+export function windowsUpdateScript({ bunExe, plan, logPath }) {
   const lines = [
     "$ErrorActionPreference = 'Stop'",
     "Start-Sleep -Seconds 1",
-    `Start-Transcript -Path '${escapePowerShell(logPath)}' -Force | Out-Null`,
-    `Write-Host 'oh-my-kimicli updater started at' (Get-Date).ToString('s')`,
-    `Write-Host 'Target: ${escapePowerShell(plan.target)}'`
+    `Start-Transcript -Path ${quotePowerShell(logPath)} -Force | Out-Null`,
+    `Write-Host ${quotePowerShell("oh-my-kimicli updater started at")} (Get-Date).ToString('s')`,
+    `Write-Host ${quotePowerShell(`Target: ${plan.target}`)}`
   ];
   for (const command of plan.commands) {
     if (command[0] === "bun") {
@@ -125,7 +125,7 @@ function windowsUpdateScript({ bunExe, plan, logPath }) {
       lines.push(runPowerShellCommand(["$omk", ...command.slice(1)], { firstIsVariable: true }));
     }
   }
-  lines.push("Write-Host 'oh-my-kimicli updater finished at' (Get-Date).ToString('s')");
+  lines.push(`Write-Host ${quotePowerShell("oh-my-kimicli updater finished at")} (Get-Date).ToString('s')`);
   lines.push("Stop-Transcript | Out-Null");
   return `${lines.join("\n")}\n`;
 }
@@ -134,7 +134,7 @@ function runPowerShellCommand(command, { firstIsVariable = false } = {}) {
   const executable = firstIsVariable ? command[0] : quotePowerShell(command[0]);
   const args = command.slice(1).map(quotePowerShell).join(" ");
   return [
-    `Write-Host '> ${command.join(" ")}'`,
+    `Write-Host ${quotePowerShell(`> ${command.join(" ")}`)}`,
     `& ${executable}${args ? ` ${args}` : ""}`,
     "if ($LASTEXITCODE -ne 0) { throw \"Command failed with exit code $LASTEXITCODE\" }"
   ].join("\n");
@@ -151,7 +151,7 @@ function requireValue(value, flag) {
   return value;
 }
 
-function quotePowerShell(value) {
+export function quotePowerShell(value) {
   return `'${escapePowerShell(value)}'`;
 }
 

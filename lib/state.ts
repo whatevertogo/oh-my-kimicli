@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { omkSessionsDir } from "./paths.ts";
 
 const DEFAULT_MAX_EVENT_LOG_LINES = 10000;
+let atomicWriteCounter = 0;
 
 export function sessionDir(sessionId, env = process.env) {
   const safe = sanitizeId(sessionId || "unknown");
@@ -37,15 +38,17 @@ export function writeState(sessionId, state, env = process.env) {
 
 export function appendEvent(sessionId, event, env = process.env) {
   const state = readState(sessionId, env);
-  state.events = (state.events || 0) + 1;
-  state.updated_at = new Date().toISOString();
-  writeState(sessionId, state, env);
+  const nextEventNumber = (state.events || 0) + 1;
+  const updatedAt = new Date().toISOString();
   mkdirSync(sessionDir(sessionId, env), { recursive: true });
   writeFileSync(
     eventsFile(sessionId, env),
-    `${JSON.stringify({ at: state.updated_at, ...event })}\n`,
+    `${JSON.stringify({ at: updatedAt, event_number: nextEventNumber, ...event })}\n`,
     { encoding: "utf8", flag: "a", mode: 0o600 }
   );
+  state.events = nextEventNumber;
+  state.updated_at = updatedAt;
+  writeState(sessionId, state, env);
   const maxLines = maxEventLogLines(env);
   if (state.events % 100 === 0 || state.events > maxLines) {
     trimEventLog(eventsFile(sessionId, env), maxLines);
@@ -183,8 +186,9 @@ function trimEventLog(file, maxLines) {
   }
 }
 
-function atomicWriteJson(file, data) {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+export function atomicWriteJson(file, data) {
+  atomicWriteCounter = (atomicWriteCounter + 1) % Number.MAX_SAFE_INTEGER;
+  const tmp = `${file}.${process.pid}.${Date.now()}.${atomicWriteCounter}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   renameSync(tmp, file);
 }

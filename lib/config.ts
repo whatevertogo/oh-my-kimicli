@@ -110,22 +110,7 @@ function normalizeConfig(value) {
 }
 
 function cloneDefaultConfig() {
-  return {
-    version: DEFAULT_CONFIG.version,
-    privacy: {
-      record_hook_prompts: DEFAULT_CONFIG.privacy.record_hook_prompts,
-      record_cwd: DEFAULT_CONFIG.privacy.record_cwd,
-      redact_secrets: DEFAULT_CONFIG.privacy.redact_secrets,
-      redact_paths: DEFAULT_CONFIG.privacy.redact_paths
-    },
-    safety: {
-      block_destructive_shell: DEFAULT_CONFIG.safety.block_destructive_shell,
-      warn_cleanup_dirs: DEFAULT_CONFIG.safety.warn_cleanup_dirs
-    },
-    features: {
-      pet: DEFAULT_CONFIG.features.pet
-    }
-  };
+  return structuredClone(DEFAULT_CONFIG);
 }
 
 function isRecord(value) {

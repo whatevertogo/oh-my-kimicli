@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 import { DEFAULT_CONFIG, ensureConfig, readConfig } from "../lib/config.ts";
 import { omkConfigFile, omkHomeDir } from "../lib/paths.ts";
+import { redactText } from "../lib/redact.ts";
 
 function withTempOmkHome(fn) {
   const dir = mkdtempSync(join(tmpdir(), "omk-config-"));
@@ -84,3 +85,17 @@ test("ensure config backs up invalid config before rewriting defaults", () =>
     assert.equal(readFileSync(join(env.OMK_HOME, backups[0]), "utf8"), "{bad-json");
     assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), DEFAULT_CONFIG);
   }));
+
+test("redaction covers shell and json environment secret shapes", () => {
+  const text = [
+    "OPENAI_API_KEY=sk-1234567890abcdef",
+    '"MOONSHOT_API_KEY": "sk-abcdef1234567890"',
+    "Authorization: Bearer abcdefghijklmnopqrstuvwxyz"
+  ].join("\n");
+  const redacted = redactText(text);
+
+  assert.doesNotMatch(redacted, /sk-1234567890abcdef|sk-abcdef1234567890|abcdefghijklmnopqrstuvwxyz/);
+  assert.match(redacted, /OPENAI_API_KEY=<redacted-secret>/);
+  assert.match(redacted, /"MOONSHOT_API_KEY": "<redacted-secret>"/);
+  assert.match(redacted, /Bearer <redacted-secret>/);
+});

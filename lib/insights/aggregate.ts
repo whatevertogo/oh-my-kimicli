@@ -1,4 +1,6 @@
-export function aggregateData(sessions, facets) {
+type AnyRecord = Record<string, any>;
+
+export function aggregateData(sessions: AnyRecord[] = [], facets: AnyRecord[] = []): AnyRecord {
   const generatedAt = new Date().toISOString();
   const metas = sessions.filter((meta) => !meta.isMetaSession);
   const responseTimes = metas.flatMap((meta) => meta.userResponseTimes);
@@ -20,8 +22,13 @@ export function aggregateData(sessions, facets) {
     totalOutputTokens: sum(metas, "outputTokens"),
     totalCacheReadTokens: sum(metas, "cacheReadTokens"),
     totalCacheCreationTokens: sum(metas, "cacheCreationTokens"),
-    totalToolCalls: metas.reduce(
-      (total, meta) => total + Object.values(meta.toolCounts).reduce((a, b) => a + b, 0),
+    totalToolCalls: metas.reduce<number>(
+      (total, meta) =>
+        total +
+        Number(Object.values(meta.toolCounts || {}).reduce(
+          (subtotal: number, value) => subtotal + Number(value || 0),
+          0
+        )),
       0
     ),
     totalToolErrors: sum(metas, "toolErrorCount"),
@@ -52,12 +59,12 @@ export function aggregateData(sessions, facets) {
   return aggregated;
 }
 
-function sum(items, key) {
+function sum(items: AnyRecord[], key: string) {
   return items.reduce((total, item) => total + Number(item[key] || 0), 0);
 }
 
-function mergeCountMaps(maps) {
-  const out = {};
+function mergeCountMaps(maps: AnyRecord[]) {
+  const out: AnyRecord = {};
   for (const map of maps) {
     for (const [key, value] of Object.entries(map || {})) {
       out[key] = (out[key] || 0) + Number(value || 0);
@@ -66,16 +73,16 @@ function mergeCountMaps(maps) {
   return sortCountMap(out);
 }
 
-function countStrings(values) {
-  const out = {};
+function countStrings(values: any[]) {
+  const out: AnyRecord = {};
   for (const value of values.filter(Boolean)) {
     out[value] = (out[value] || 0) + 1;
   }
   return sortCountMap(out);
 }
 
-function aggregateProjects(metas) {
-  const out = {};
+function aggregateProjects(metas: AnyRecord[]) {
+  const out: Record<string, { sessions: number; messages: number }> = {};
   for (const meta of metas) {
     const key = meta.projectPath || meta.projectHash || "unknown";
     out[key] ||= { sessions: 0, messages: 0 };
@@ -87,15 +94,15 @@ function aggregateProjects(metas) {
   );
 }
 
-function sortCountMap(map) {
-  return Object.fromEntries(Object.entries(map).sort((a, b) => b[1] - a[1]));
+function sortCountMap(map: AnyRecord) {
+  return Object.fromEntries(Object.entries(map).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0)));
 }
 
-function average(values) {
+function average(values: number[]) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
 }
 
-function median(values) {
+function median(values: number[]) {
   if (!values.length) {
     return 0;
   }
@@ -104,8 +111,8 @@ function median(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function detectMultiSessionUsage(metas) {
-  const events = [];
+function detectMultiSessionUsage(metas: AnyRecord[]) {
+  const events: Array<{ sessionId: string; time: number }> = [];
   for (const meta of metas) {
     for (const timestamp of meta.userMessageTimestamps) {
       const time = Date.parse(timestamp);

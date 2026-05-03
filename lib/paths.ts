@@ -53,3 +53,11 @@ export function omkDataDir(env = process.env) {
 export function omkSessionsDir(env = process.env) {
   return join(omkDataDir(env), "sessions");
 }
+
+export function projectOmkStateDir(cwd = process.cwd()) {
+  return join(resolve(cwd), ".omk", "state");
+}
+
+export function projectRalphStateFile(cwd = process.cwd()) {
+  return join(projectOmkStateDir(cwd), "ralph-state.json");
+}

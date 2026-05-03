@@ -1,4 +1,6 @@
-export function generateHtmlReport(report) {
+type AnyRecord = Record<string, any>;
+
+export function generateHtmlReport(report: AnyRecord) {
   const metrics = report.metrics || report.aggregated || {};
   const sections = report.sections || {};
   const quality = report.quality || {};
@@ -92,7 +94,7 @@ export function generateHtmlReport(report) {
 </html>`;
 }
 
-function stats(metrics, labels) {
+function stats(metrics: AnyRecord, labels: AnyRecord) {
   return `<div class="stats">
     ${stat(labels.sessions, metrics.scannedSessions)}
     ${stat(labels.analyzed, metrics.analyzedSessions)}
@@ -104,11 +106,11 @@ function stats(metrics, labels) {
   </div>`;
 }
 
-function stat(label, value) {
+function stat(label: string, value: any) {
   return `<div class="stat"><span class="muted">${escapeHtml(label)}</span><strong>${escapeHtml(formatNumber(value))}</strong></div>`;
 }
 
-function nav(labels) {
+function nav(labels: AnyRecord) {
   return `<nav class="nav">
     <a href="#glance">At a Glance</a>
     <a href="#areas">Project Areas</a>
@@ -123,7 +125,7 @@ function nav(labels) {
   </nav>`;
 }
 
-function atAGlance(section = {}, labels) {
+function atAGlance(section: AnyRecord = {}, labels: AnyRecord) {
   return `<section id="glance"><h2>At a Glance</h2><div class="glance">
     ${glanceRow("What's working", section.whats_working, labels)}
     ${glanceRow("What's hindering you", section.whats_hindering, labels)}
@@ -132,11 +134,11 @@ function atAGlance(section = {}, labels) {
   </div></section>`;
 }
 
-function glanceRow(title, body, labels) {
+function glanceRow(title: string, body: any, labels: AnyRecord) {
   return `<div class="glance-row"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(body || labels.noEvidence)}</p></div>`;
 }
 
-function projectAreas(section = {}, labels) {
+function projectAreas(section: AnyRecord = {}, labels: AnyRecord) {
   const areas = asArray(section.areas);
   if (!areas.length) return "";
   return `<section id="areas"><h2>Project Areas</h2>${areas
@@ -147,12 +149,12 @@ function projectAreas(section = {}, labels) {
     .join("")}</section>`;
 }
 
-function interactionStyle(section = {}, labels) {
+function interactionStyle(section: AnyRecord = {}, labels: AnyRecord) {
   if (!section.narrative && !section.key_pattern) return "";
   return `<section id="style"><h2>How You Use KimiCLI</h2><p>${escapeHtml(section.narrative || labels.noEvidence)}</p><p><strong>Key pattern:</strong> ${escapeHtml(section.key_pattern || labels.noEvidence)}</p></section>`;
 }
 
-function whatWorks(section = {}, labels) {
+function whatWorks(section: AnyRecord = {}, labels: AnyRecord) {
   const items = asArray(section.impressive_workflows);
   if (!items.length && !section.intro) return "";
   return `<section id="wins"><h2>Impressive Things</h2><p>${escapeHtml(section.intro || "")}</p>${items
@@ -160,7 +162,7 @@ function whatWorks(section = {}, labels) {
     .join("")}</section>`;
 }
 
-function frictionAnalysis(section = {}, labels) {
+function frictionAnalysis(section: AnyRecord = {}, labels: AnyRecord) {
   const categories = asArray(section.categories);
   if (!categories.length && !section.intro) return "";
   return `<section id="friction"><h2>Where Things Go Wrong</h2><p>${escapeHtml(section.intro || "")}</p>${categories
@@ -171,7 +173,7 @@ function frictionAnalysis(section = {}, labels) {
     .join("")}</section>`;
 }
 
-function suggestions(section = {}, labels) {
+function suggestions(section: AnyRecord = {}, labels: AnyRecord) {
   const instructions = asArray(section.kimi_instructions_additions);
   const features = asArray(section.features_to_try);
   const patterns = asArray(section.usage_patterns);
@@ -184,11 +186,11 @@ function suggestions(section = {}, labels) {
   </section>`;
 }
 
-function suggestionItem(title, body, copy) {
+function suggestionItem(title: any, body: any, copy: any) {
   return `<div class="item"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p>${copy ? `<div class="copy">${escapeHtml(copy)}</div>` : ""}</div>`;
 }
 
-function skillOpportunities(section = {}, labels) {
+function skillOpportunities(section: AnyRecord = {}, labels: AnyRecord) {
   const candidates = asArray(section.candidates);
   if (!candidates.length) return "";
   return `<section id="skills"><h2>Skill Suggestions</h2>${candidates
@@ -199,7 +201,7 @@ function skillOpportunities(section = {}, labels) {
     .join("")}</section>`;
 }
 
-function horizon(section = {}, labels) {
+function horizon(section: AnyRecord = {}, labels: AnyRecord) {
   const opportunities = asArray(section.opportunities);
   if (!opportunities.length && !section.intro) return "";
   return `<section id="horizon"><h2>On the Horizon</h2><p>${escapeHtml(section.intro || "")}</p>${opportunities
@@ -210,7 +212,7 @@ function horizon(section = {}, labels) {
     .join("")}</section>`;
 }
 
-function metricsSection(metrics, facetsSummary, labels) {
+function metricsSection(metrics: AnyRecord, facetsSummary: AnyRecord, labels: AnyRecord) {
   return `<section id="metrics"><h2>Metrics</h2><div class="grid">
     ${chart("Tools", metrics.toolCounts)}
     ${chart("Tool Errors", metrics.toolErrorCategories)}
@@ -221,13 +223,13 @@ function metricsSection(metrics, facetsSummary, labels) {
   </div></section>`;
 }
 
-function evidenceNotes(quality, labels) {
+function evidenceNotes(quality: AnyRecord, labels: AnyRecord) {
   const notes = [...asArray(quality.data_limits), ...asArray(quality.omitted_sections).map((item) => `Omitted: ${item}`)];
   if (!notes.length && !quality.evidence_strength) return "";
   return `<section id="evidence"><h2>Evidence Notes</h2><p><strong>Evidence strength:</strong> ${escapeHtml(quality.evidence_strength || "unknown")}</p>${bulletList(notes)}</section>`;
 }
 
-function chart(title, map) {
+function chart(title: string, map: AnyRecord) {
   const entries = Object.entries(map || {}).slice(0, 10);
   if (!entries.length) return "";
   const max = Math.max(...entries.map(([, value]) => Number(value) || 0), 1);
@@ -239,16 +241,16 @@ function chart(title, map) {
     .join("")}</div>`;
 }
 
-function bulletList(items) {
+function bulletList(items: any) {
   const list = asArray(items).filter(Boolean);
   return list.length ? `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
 }
 
-function asArray(value) {
+function asArray(value: any): any[] {
   return Array.isArray(value) ? value : [];
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: any) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -256,16 +258,16 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function formatNumber(value) {
+function formatNumber(value: any) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toLocaleString() : String(value ?? "0");
 }
 
-function labelize(value) {
+function labelize(value: any) {
   return String(value || "unknown").replace(/_/g, " ");
 }
 
-function htmlLabels(language) {
+function htmlLabels(language: any): AnyRecord {
   const zh = String(language || "").toLowerCase().startsWith("zh");
   return {
     lang: zh ? "zh-CN" : "en",

@@ -103,7 +103,7 @@ export function buildSessionMeta(session, turns) {
         if (/web|search|fetch/i.test(name)) {
           usesWeb = true;
         }
-        if (/agent/i.test(name)) {
+        if (isSubagentToolName(name)) {
           usesSubagent = true;
         }
         const args = parseToolArgs(fn.arguments);
@@ -276,4 +276,16 @@ function categorizeToolError(text) {
 function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function isSubagentToolName(name) {
+  const normalized = String(name || "").trim().toLowerCase();
+  return (
+    normalized === "agent" ||
+    normalized === "task" ||
+    normalized === "agenttool" ||
+    normalized.endsWith(".agent") ||
+    normalized.endsWith(":agent") ||
+    normalized.endsWith("__agent")
+  );
 }

@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { projectOmkStateDir, projectRalphStateFile } from "./paths.ts";
+import { atomicWriteJson } from "./state.ts";
 
 export function workflowStatus({ cwd = process.cwd() } = {}) {
   const path = ralphStatePath(cwd);
@@ -40,7 +42,7 @@ export function resumeWorkflow({ cwd = process.cwd(), reason = "resumed by user 
 }
 
 export function cleanWorkflow({ cwd = process.cwd() } = {}) {
-  const dir = join(resolve(cwd), ".omk", "state");
+  const dir = projectOmkStateDir(cwd);
   rmSync(dir, { recursive: true, force: true });
   return { removed: dir };
 }
@@ -65,13 +67,13 @@ export function formatWorkflowStatus(result) {
 }
 
 function ralphStatePath(cwd) {
-  return join(resolve(cwd), ".omk", "state", "ralph-state.json");
+  return projectRalphStateFile(cwd);
 }
 
 function writeRalphState(cwd, state) {
   const path = ralphStatePath(cwd);
-  mkdirSync(join(resolve(cwd), ".omk", "state"), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  mkdirSync(projectOmkStateDir(cwd), { recursive: true });
+  atomicWriteJson(path, state);
 }
 
 function readJson(path) {

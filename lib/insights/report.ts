@@ -24,6 +24,8 @@ const DEFAULT_LIMITS = {
   max_user_instruction_candidates: 25
 };
 
+type AnyRecord = Record<string, any>;
+
 export function insightsPaths(env = process.env) {
   const usageDir = omkUsageDataDir(env);
   const insightsDir = join(usageDir, "insights");
@@ -39,7 +41,7 @@ export function insightsPaths(env = process.env) {
   };
 }
 
-export async function prepareInsightsEvidence(options = {}) {
+export async function prepareInsightsEvidence(options: AnyRecord = {}) {
   const env = options.env || process.env;
   const paths = insightsPaths(env);
   mkdirSync(paths.insightsDir, { recursive: true });
@@ -78,7 +80,7 @@ export async function prepareInsightsEvidence(options = {}) {
   };
 }
 
-export async function renderInsightsReport({ env = process.env } = {}) {
+export async function renderInsightsReport({ env = process.env }: AnyRecord = {}) {
   const paths = insightsPaths(env);
   const evidence = readJson(paths.evidenceJsonPath, "evidence pack");
   const content = normalizeInsightsContent(readJson(paths.contentPath, "insights content"));
@@ -108,7 +110,7 @@ export async function renderInsightsReport({ env = process.env } = {}) {
   return report;
 }
 
-function buildAggregatedData(options = {}) {
+function buildAggregatedData(options: AnyRecord = {}) {
   const env = options.env || process.env;
   const limit = numberOption(options.limit, DEFAULT_LIMITS.max_sessions_scanned);
   const metaLimit = numberOption(options.metaLimit, DEFAULT_LIMITS.max_meta_sessions);
@@ -143,7 +145,7 @@ function buildAggregatedData(options = {}) {
   return { liteSessions, metas, sessionInputs, aggregated };
 }
 
-function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggregated, options }) {
+function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggregated, options }: AnyRecord) {
   const candidates = sessionInputs
     .filter(({ meta }) => !meta.isMetaSession && !isInsightsSession(meta) && meta.userMessageCount > 0)
     .map((entry) => ({ ...entry, score: scoreSession(entry.meta) }))
@@ -204,11 +206,11 @@ function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggrega
     },
     aggregate_metrics: limitAggregated(aggregated),
     session_evidence: sessionEvidence,
-    friction_details: buildFrictionDetails(sessionInputs.map(({ meta }) => meta)).slice(
+    friction_details: (aggregated.frictionDetails || []).slice(0, DEFAULT_LIMITS.max_friction_details),
+    repeated_user_instructions: (aggregated.userInstructionsToAssistant || []).slice(
       0,
-      DEFAULT_LIMITS.max_friction_details
+      DEFAULT_LIMITS.max_user_instruction_candidates
     ),
-    repeated_user_instructions: buildUserInstructions(sessionInputs.map(({ meta }) => meta)),
     feature_reference: recommendationContext(),
     meta_filtered: {
       insights_sessions_excluded: sessionInputs.filter(({ meta }) => isInsightsSession(meta)).length,
@@ -218,7 +220,7 @@ function buildEvidencePack({ env, paths, scannedSessions, sessionInputs, aggrega
   };
 }
 
-function renderEvidenceMarkdown(evidence) {
+function renderEvidenceMarkdown(evidence: AnyRecord) {
   return [
     "OMK_INSIGHTS_INTERNAL",
     "",
@@ -279,7 +281,7 @@ function renderEvidenceMarkdown(evidence) {
   ].join("\n");
 }
 
-function renderSessionEvidence(session, index) {
+function renderSessionEvidence(session: AnyRecord, index: number) {
   return [
     `### Session ${index + 1}: ${session.session_id}`,
     "",
@@ -300,7 +302,7 @@ function renderSessionEvidence(session, index) {
   ].join("\n");
 }
 
-function normalizeInsightsContent(value) {
+function normalizeInsightsContent(value: any) {
   if (!isObject(value)) {
     throw new Error("insights content must be a JSON object");
   }
@@ -324,7 +326,7 @@ function normalizeInsightsContent(value) {
   };
 }
 
-function validateInsightsContent(value) {
+function validateInsightsContent(value: any) {
   const errors = [];
   if (value.schema_version !== 1) {
     errors.push("schema_version must be 1");
@@ -428,7 +430,7 @@ function insightsContentSchema() {
   };
 }
 
-function summarizeFacets(facets) {
+function summarizeFacets(facets: any[]) {
   const summary = {
     total: Array.isArray(facets) ? facets.length : 0,
     goal_categories: {},
@@ -445,7 +447,7 @@ function summarizeFacets(facets) {
   return summary;
 }
 
-function buildSessionSummaries(metas) {
+function buildSessionSummaries(metas: AnyRecord[]) {
   return metas
     .filter((meta) => !meta.isMetaSession && !isInsightsSession(meta))
     .slice(0, DEFAULT_LIMITS.max_facet_sessions)
@@ -455,7 +457,7 @@ function buildSessionSummaries(metas) {
     );
 }
 
-function buildFrictionDetails(metas) {
+function buildFrictionDetails(metas: AnyRecord[]) {
   const details = [];
   for (const meta of metas.filter((item) => !item.isMetaSession && !isInsightsSession(item))) {
     for (const [category, count] of Object.entries(meta.toolErrorCategories || {})) {
@@ -472,7 +474,7 @@ function buildFrictionDetails(metas) {
   return details.slice(0, DEFAULT_LIMITS.max_friction_details);
 }
 
-function buildUserInstructions(metas) {
+function buildUserInstructions(metas: AnyRecord[]) {
   const counts = new Map();
   for (const meta of metas.filter((item) => !item.isMetaSession && !isInsightsSession(item))) {
     for (const prompt of instructionCandidates(meta)) {
@@ -486,7 +488,7 @@ function buildUserInstructions(metas) {
     .slice(0, DEFAULT_LIMITS.max_user_instruction_candidates);
 }
 
-function instructionCandidates(meta) {
+function instructionCandidates(meta: AnyRecord) {
   const prompts = Array.isArray(meta.userInputs) && meta.userInputs.length ? meta.userInputs : [meta.firstPrompt];
   const patterns = [
     /用中文/,
@@ -504,7 +506,7 @@ function instructionCandidates(meta) {
     .filter((prompt) => patterns.some((pattern) => pattern.test(prompt)) || prompt.split(/\s+/).length <= 12);
 }
 
-function buildLanguageProfile(metas) {
+function buildLanguageProfile(metas: AnyRecord[]) {
   const counts = { zh: 0, en: 0, mixed: 0, unknown: 0 };
   for (const meta of metas.filter((item) => !item.isMetaSession && !isInsightsSession(item))) {
     const language = classifyLanguage(meta.firstPrompt).code;
@@ -538,7 +540,7 @@ function buildLanguageProfile(metas) {
   };
 }
 
-function buildTimeOfDay(metas) {
+function buildTimeOfDay(metas: AnyRecord[]) {
   const buckets = { morning: 0, afternoon: 0, evening: 0, night: 0 };
   for (const meta of metas.filter((item) => !item.isMetaSession && !isInsightsSession(item))) {
     for (const hour of meta.messageHours || []) {
@@ -556,7 +558,7 @@ function buildTimeOfDay(metas) {
   return buckets;
 }
 
-function buildWorkflowSignals(metas) {
+function buildWorkflowSignals(metas: AnyRecord[]) {
   const visible = metas.filter((item) => !item.isMetaSession && !isInsightsSession(item));
   return {
     prompt_intents: countTags(visible.flatMap((meta) => classifyPrompt(meta.firstPrompt))),
@@ -573,7 +575,7 @@ function buildWorkflowSignals(metas) {
   };
 }
 
-function limitTurns(turns, mode) {
+function limitTurns(turns: AnyRecord[], mode: string) {
   const visible = turns.filter((turn) => !turn.internal);
   if (mode === "deep") {
     return visible;
@@ -586,7 +588,7 @@ function limitTurns(turns, mode) {
   return uniqueTurns([...head, ...errorTurns, ...tail]).slice(0, DEFAULT_LIMITS.max_excerpts_per_deep_session);
 }
 
-function uniqueTurns(turns) {
+function uniqueTurns(turns: AnyRecord[]) {
   const seen = new Set();
   return turns.filter((turn) => {
     const key = `${turn.timestamp}:${turn.userInput}`;
@@ -598,7 +600,7 @@ function uniqueTurns(turns) {
   });
 }
 
-function scoreSession(meta) {
+function scoreSession(meta: AnyRecord) {
   return (
     meta.userMessageCount * 10 +
     meta.assistantStepCount * 3 +
@@ -612,7 +614,7 @@ function scoreSession(meta) {
   );
 }
 
-function selectionReasons(meta) {
+function selectionReasons(meta: AnyRecord) {
   const reasons = [];
   if (meta.userMessageCount >= 2) {
     reasons.push("multiple_user_turns");
@@ -635,11 +637,11 @@ function selectionReasons(meta) {
   return reasons.length ? reasons : ["substantive_prompt"];
 }
 
-function isInsightsSession(meta) {
+function isInsightsSession(meta: AnyRecord) {
   return /(^|\s)\/?skill:insights\b|^omk insights\b|OMK_INSIGHTS_INTERNAL/i.test(meta.firstPrompt || "");
 }
 
-function effectiveLimits(options = {}) {
+function effectiveLimits(options: AnyRecord = {}) {
   return {
     max_sessions_scanned: numberOption(options.limit, DEFAULT_LIMITS.max_sessions_scanned),
     max_meta_sessions: numberOption(options.metaLimit, DEFAULT_LIMITS.max_meta_sessions),
@@ -652,7 +654,7 @@ function effectiveLimits(options = {}) {
   };
 }
 
-function limitAggregated(aggregated) {
+function limitAggregated(aggregated: AnyRecord) {
   return {
     ...aggregated,
     toolCounts: topMap(aggregated.toolCounts, 15),
@@ -695,7 +697,7 @@ function recommendationContext() {
   };
 }
 
-function readJson(path, label) {
+function readJson(path: string, label: string) {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
@@ -703,44 +705,44 @@ function readJson(path, label) {
   }
 }
 
-function addMap(target, source) {
+function addMap(target: AnyRecord, source: AnyRecord) {
   for (const [key, value] of Object.entries(source || {})) {
     target[key] = (target[key] || 0) + Number(value || 0);
   }
 }
 
-function increment(target, key) {
+function increment(target: AnyRecord, key: string) {
   if (key) {
     target[key] = (target[key] || 0) + 1;
   }
 }
 
-function fencedJson(value) {
+function fencedJson(value: any) {
   return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
 }
 
-function bulletList(items) {
+function bulletList(items: any[]) {
   return items && items.length ? items.map((item) => `- ${item}`).join("\n") : "- none";
 }
 
-function object(value) {
+function object(value: any) {
   return isObject(value) ? value : {};
 }
 
-function text(value, fallback) {
+function text(value: any, fallback: string) {
   const string = String(value ?? "").trim();
   return string || fallback;
 }
 
-function isObject(value) {
+function isObject(value: any) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function topMap(map, limit) {
+function topMap(map: AnyRecord, limit: number) {
   return Object.fromEntries(Object.entries(map || {}).slice(0, limit));
 }
 
-function classifyPrompt(prompt) {
+function classifyPrompt(prompt: any) {
   const textValue = String(prompt || "").toLowerCase();
   const tags = [];
   if (/review|code review|审查|检查|看看|有无/.test(textValue)) {
@@ -761,15 +763,15 @@ function classifyPrompt(prompt) {
   return tags.length ? tags : ["general"];
 }
 
-function countTags(tags) {
-  const out = {};
+function countTags(tags: string[]) {
+  const out: AnyRecord = {};
   for (const tag of tags) {
     out[tag] = (out[tag] || 0) + 1;
   }
   return topMap(Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1])), 10);
 }
 
-function countFeatureMentions(input) {
+function countFeatureMentions(input: any) {
   const value = String(input || "").toLowerCase();
   const features = {
     skills: /skill|技能/g,
@@ -783,13 +785,13 @@ function countFeatureMentions(input) {
   };
   return Object.fromEntries(
     Object.entries(features)
-      .map(([name, regex]) => [name, (value.match(regex) || []).length])
+      .map(([name, regex]) => [name, (value.match(regex) || []).length] as [string, number])
       .filter(([, count]) => count > 0)
       .sort((a, b) => b[1] - a[1])
   );
 }
 
-function classifyLanguage(input) {
+function classifyLanguage(input: any) {
   const value = String(input || "");
   const cjk = (value.match(/[\u3400-\u9fff]/g) || []).length;
   const latin = (value.match(/[A-Za-z]/g) || []).length;
@@ -805,17 +807,17 @@ function classifyLanguage(input) {
   return { code: "unknown" };
 }
 
-function numberOption(value, fallback) {
+function numberOption(value: any, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
-function truncate(value, max) {
+function truncate(value: any, max: number) {
   const valueText = String(value || "").replace(/\s+/g, " ").trim();
   return valueText.length > max ? `${valueText.slice(0, max - 1)}...` : valueText;
 }
 
-function truncateBlock(value, max) {
+function truncateBlock(value: any, max: number) {
   const valueText = String(value || "").trim();
   if (max <= 0) {
     return "";
@@ -823,7 +825,7 @@ function truncateBlock(value, max) {
   return valueText.length > max ? `${valueText.slice(0, Math.max(0, max - 1)).trimEnd()}...` : valueText;
 }
 
-function round(value) {
+function round(value: any) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number * 10) / 10 : 0;
 }

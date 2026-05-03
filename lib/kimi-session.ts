@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { kimiShareDir } from "./paths.ts";
 
-export function readKimiSessionState(sessionId, cwd, env = process.env) {
+export function readKimiSessionState(sessionId: string, cwd: string, env = process.env) {
   for (const candidate of sessionStateCandidates(sessionId, cwd, env)) {
     try {
       if (existsSync(candidate)) {
@@ -16,9 +16,9 @@ export function readKimiSessionState(sessionId, cwd, env = process.env) {
   return null;
 }
 
-function sessionStateCandidates(sessionId, cwd, env) {
+function sessionStateCandidates(sessionId: string, cwd: string, env = process.env) {
   const share = kimiShareDir(env);
-  const candidates = [];
+  const candidates: string[] = [];
   const fromMetadata = findFromMetadata(share, sessionId, cwd);
   if (fromMetadata) {
     candidates.push(fromMetadata);
@@ -30,14 +30,14 @@ function sessionStateCandidates(sessionId, cwd, env) {
   return dedupe(candidates);
 }
 
-function findFromMetadata(share, sessionId, cwd) {
+function findFromMetadata(share: string, sessionId: string, cwd: string) {
   if (!cwd) {
     return null;
   }
   try {
     const metadata = JSON.parse(readFileSync(join(share, "kimi.json"), "utf8"));
     const workDirs = Array.isArray(metadata.work_dirs) ? metadata.work_dirs : [];
-    const match = workDirs.find((item) => item && item.path === cwd);
+    const match = workDirs.find((item: any) => item && item.path === cwd);
     if (!match) {
       return null;
     }
@@ -49,7 +49,7 @@ function findFromMetadata(share, sessionId, cwd) {
   }
 }
 
-function findBySessionId(share, sessionId) {
+function findBySessionId(share: string, sessionId: string) {
   const sessionsRoot = join(share, "sessions");
   try {
     return readdirSync(sessionsRoot, { withFileTypes: true })
@@ -60,10 +60,10 @@ function findBySessionId(share, sessionId) {
   }
 }
 
-function md5(value) {
+function md5(value: string) {
   return createHash("md5").update(String(value), "utf8").digest("hex");
 }
 
-function dedupe(values) {
+function dedupe(values: string[]) {
   return [...new Set(values)];
 }
