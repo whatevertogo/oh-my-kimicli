@@ -1,6 +1,7 @@
 import {
   createHash
 } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import {
   accessSync,
   constants,
@@ -25,6 +26,7 @@ import {
   packageRoot
 } from "./paths.ts";
 import { ensureConfig, readConfig } from "./config.ts";
+import pluginManifest from "../plugin/plugin.json" with { type: "json" };
 
 const HOOK_BLOCK_START = "# >>> oh-my-kimicli hooks >>>";
 const HOOK_BLOCK_END = "# <<< oh-my-kimicli hooks <<<";
@@ -52,7 +54,7 @@ export function uninstall() {
   removeManagedSkills();
 }
 
-export function doctor() {
+export function doctor({ runtime = false } = {}) {
   const config = kimiConfigFile();
   const plugin = kimiPluginInstallDir();
   const skills = kimiUserSkillsDir();
@@ -77,8 +79,11 @@ export function doctor() {
     hooks_installed: configText.includes(HOOK_BLOCK_START),
     hook_command: hookCommand,
     hook_command_resolvable: hookCommand ? commandLooksResolvable(hookCommand) : false,
+    runtime_check: runtime ? checkRuntimeHook() : null,
     plugin_dir: plugin,
     plugin_installed: existsSync(join(plugin, "plugin.json")),
+    plugin_manifest: pluginManifest,
+    plugin_capabilities: pluginManifest.kimi || {},
     skills_dir: skills,
     installed_skills: Object.entries(skillStatus)
       .filter(([, status]) => status.managed)
@@ -384,6 +389,26 @@ function commandLooksResolvable(command) {
   const match = /^"([^"]+)"|^(\S+)/.exec(command);
   const executable = match ? match[1] || match[2] : "";
   return executable ? existsSync(executable) || executable === "omk" : false;
+}
+
+function checkRuntimeHook() {
+  const result = spawnSync(process.execPath, [join(packageRoot, "bin", "omk.ts"), "hook"], {
+    input: JSON.stringify({
+      session_id: "omk-doctor-runtime",
+      hook_event_name: "PreToolUse",
+      tool_name: "ReadFile",
+      tool_input: { path: "README.md" },
+      cwd: packageRoot
+    }),
+    encoding: "utf8",
+    env: process.env
+  });
+  return {
+    ok: result.status === 0,
+    exit_code: result.status,
+    stderr: String(result.stderr || "").trim(),
+    stdout: String(result.stdout || "").trim()
+  };
 }
 
 function shellQuote(value) {

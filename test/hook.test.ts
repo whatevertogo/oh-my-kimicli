@@ -215,6 +215,34 @@ test("hook keeps conditional prompts when tool success confirmation is still pen
   }
 });
 
+test("pre-tool hook records corrupt Ralph state without repairing it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
+  try {
+    const statePath = join(dir, ".omk", "state", "ralph-state.json");
+    mkdirSync(dirname(statePath), { recursive: true });
+    writeFileSync(statePath, "{bad-json", "utf8");
+
+    const result = runHookIn(
+      dir,
+      JSON.stringify({
+        session_id: "s1",
+        hook_event_name: "PreToolUse",
+        tool_name: "ReadFile",
+        tool_input: { path: "README.md" },
+        cwd: dir
+      })
+    );
+
+    assert.equal(result.status, 0);
+    assert.equal(readFileSync(statePath, "utf8"), "{bad-json");
+    const log = readFileSync(eventsFile("s1", { KIMI_SHARE_DIR: dir }), "utf8");
+    assert.match(log, /ralph_state_health/);
+    assert.match(log, /corrupt/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("hook does not create legacy workflow continuation from skill prompts", () => {
   const dir = mkdtempSync(join(tmpdir(), "omk-hook-"));
   try {

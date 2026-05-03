@@ -48,6 +48,7 @@ export async function runHook() {
   }
 
   if (eventName === "PreToolUse") {
+    recordRalphStateHealth(sessionId, input.cwd);
     queuePlanModeCandidate(sessionId, input);
     const reason = unsafeToolReason(input);
     if (reason) {
@@ -104,6 +105,34 @@ function confirmPlanModeCandidate(sessionId, input) {
   const output = String(input.tool_output || "");
   if (toolName === "EnterPlanMode" && /Plan mode (activated|on)/i.test(output)) {
     markConditionalPromptPostSuccess(sessionId, `tool:${toolName}`);
+  }
+}
+
+function recordRalphStateHealth(sessionId, cwd) {
+  if (!cwd) {
+    return;
+  }
+  const statePath = projectRalphStateFile(cwd);
+  if (!existsSync(statePath)) {
+    return;
+  }
+  try {
+    const state = JSON.parse(readFileSync(statePath, "utf8"));
+    if (state.workflow && state.workflow !== "ralph") {
+      appendEvent(sessionId, {
+        type: "ralph_state_health",
+        status: "inconsistent",
+        path: statePath,
+        reason: `unexpected workflow: ${state.workflow}`
+      });
+    }
+  } catch (error) {
+    appendEvent(sessionId, {
+      type: "ralph_state_health",
+      status: "corrupt",
+      path: statePath,
+      reason: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 

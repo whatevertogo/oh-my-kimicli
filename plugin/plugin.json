@@ -2,5 +2,30 @@
   "name": "oh-my-kimicli",
   "version": "0.1.0",
   "description": "Hook-first workflow orchestration for Kimi Code CLI.",
+  "kimi": {
+    "minVersion": "1.30.0",
+    "hooks": [
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "Stop",
+      "SubagentStop",
+      "StopFailure"
+    ],
+    "skills": [
+      "insights",
+      "omk-ralph",
+      "ultrawork",
+      "omk-review",
+      "requirements-elicitation",
+      "clarify-first"
+    ],
+    "commands": {
+      "omk": {
+        "entry": "bin/omk.ts",
+        "runtime": "bun"
+      }
+    }
+  },
   "tools": []
 }

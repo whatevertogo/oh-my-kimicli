@@ -1,6 +1,6 @@
 {
   "name": "@whatevertogo/oh-my-kimicli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Personal workflow orchestration for Kimi Code CLI: skills, hooks, persistent continuation, review gates, and usage insights.",
   "type": "module",
   "bin": {

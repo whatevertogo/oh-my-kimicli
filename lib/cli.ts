@@ -43,7 +43,11 @@ export async function main(args) {
       runUpdate(rest);
       return;
     case "doctor":
-      console.log(JSON.stringify(doctor(), null, 2));
+      if (rest.includes("--skills")) {
+        console.log(JSON.stringify(doctor().skill_status, null, 2));
+        return;
+      }
+      console.log(JSON.stringify(doctor({ runtime: rest.includes("--runtime") }), null, 2));
       return;
     case "config":
       console.log(JSON.stringify(ensureConfig(), null, 2));
@@ -68,19 +72,30 @@ function printHelp() {
   console.log(`oh-my-kimicli
 
 Usage:
+
+Lifecycle:
   omk setup [--force]     Create ~/.omk state and install plugin, skills, and hooks
   omk update              Reinstall npm latest and refresh setup
   omk uninstall           Remove managed hooks, plugin, and managed skills
+  omk doctor              Print machine-readable installation diagnostics
+  omk doctor --runtime    Include a dry-run hook runtime check
+  omk doctor --skills     Print per-skill sync status only
+
+Project workflow:
   omk status              Show project-local OMK workflow state
   omk cancel              Mark project-local Ralph workflow as blocked
   omk resume              Mark project-local Ralph workflow as active
   omk clean               Remove project-local OMK workflow state
-  omk config              Create or normalize ~/.omk/config.json
-  omk doctor              Print machine-readable installation diagnostics
-  omk review-target       Print JSON describing the current review target
+
+Pipelines:
   omk insights prepare    Generate evidence pack for /skill:insights
   omk insights render     Render report from insights-content.json
   omk insights paths      Print insights artifact paths
+
+Helpers:
+  omk config              Create or normalize ~/.omk/config.json
+  omk review-target       Print JSON describing the current review target
+  omk hook                Internal KimiCLI hook entrypoint
   omk help                Show this help
 
 Inside KimiCLI:
