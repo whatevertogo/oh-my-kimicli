@@ -13,26 +13,23 @@ oh-my-kimicli does not replace KimiCLI. It adds a maintainable workflow layer ar
 ## Current Status
 
 - Published package: `@whatevertogo/oh-my-kimicli`.
-- npm page: <https://www.npmjs.com/package/@whatevertogo/oh-my-kimicli>
-- Install source: npm is recommended; GitHub source install is only a development fallback.
-- Runtime: Bun is required because the `omk` entrypoint runs TypeScript directly.
 - KimiCLI integration: writes skills to `~/.kimi/skills` and registers hooks in `~/.kimi/config.toml`.
 - Project-local state: Ralph and Ultrawork state lives under `./.omk/state/`.
 - User config: `~/.omk/config.json`.
 
 ## Installation
 
-Recommended Bun install:
-
-```sh
-bun install -g @whatevertogo/oh-my-kimicli
-omk setup
-```
-
-You can also install with npm, but running `omk` still requires Bun to be installed locally:
+Recommended npm install:
 
 ```sh
 npm install -g @whatevertogo/oh-my-kimicli
+omk setup
+```
+
+If you explicitly want Bun to manage global packages, you can also use:
+
+```sh
+bun install -g @whatevertogo/oh-my-kimicli
 omk setup
 ```
 
@@ -65,12 +62,12 @@ Recommended:
 omk update
 ```
 
-`omk update` uses the stable update path that worked around Bun's global package caching:
+`omk update` uses npm by default for the published package and then refreshes managed skills/hooks:
 
 ```sh
-bun remove -g oh-my-kimicli
-bun remove -g @whatevertogo/oh-my-kimicli
-bun install -g @whatevertogo/oh-my-kimicli
+npm uninstall -g oh-my-kimicli
+npm uninstall -g @whatevertogo/oh-my-kimicli
+npm install -g @whatevertogo/oh-my-kimicli
 omk setup --force
 ```
 
@@ -80,9 +77,9 @@ omk setup --force
 ~/.kimi/skills/.omk-backups/<timestamp>/
 ```
 
-Why not just run `bun install -g @whatevertogo/oh-my-kimicli`?
+Why not keep Bun as the default updater?
 
-Bun can keep an old resolved package source for a global package. The command may appear to finish while `bun pm ls -g` still points at an old version or source. `omk update` removes the old global package first, reinstalls from npm latest, and refreshes managed skills/hooks.
+Bun is still the recommended development toolchain for this repo, but the npm package is aimed at regular KimiCLI users and should not require an extra runtime. If you want Bun to manage the global package, use `omk update --manager bun`.
 
 On Windows, `omk update` schedules the update after the current `omk.exe` process exits. This avoids deleting the executable while it is still running. The update log is written to:
 
@@ -95,15 +92,16 @@ Options:
 ```sh
 omk update --dry-run                 # print the planned commands only
 omk update --target github:owner/repo#branch
+omk update --manager bun             # use Bun to manage the global package
 omk update --no-setup                # update the global package without refreshing KimiCLI files
 ```
 
 If your installed version does not have `omk update` yet, run the manual update once:
 
 ```sh
-bun remove -g oh-my-kimicli
-bun remove -g @whatevertogo/oh-my-kimicli
-bun install -g @whatevertogo/oh-my-kimicli
+npm uninstall -g oh-my-kimicli
+npm uninstall -g @whatevertogo/oh-my-kimicli
+npm install -g @whatevertogo/oh-my-kimicli
 omk setup --force
 ```
 
@@ -354,8 +352,8 @@ Uninstall uses the OMK marker as the ownership boundary. Same-name user skills w
 To remove the global CLI:
 
 ```sh
-bun remove -g oh-my-kimicli
-bun remove -g @whatevertogo/oh-my-kimicli
+npm uninstall -g oh-my-kimicli
+npm uninstall -g @whatevertogo/oh-my-kimicli
 ```
 
 ## Local Development
@@ -363,6 +361,7 @@ bun remove -g @whatevertogo/oh-my-kimicli
 ```sh
 bun install
 bun test
+bun run build
 bun run check
 bun run pack:all
 ```
@@ -377,12 +376,13 @@ omk setup --force
 Artifacts:
 
 ```text
-dist/npm/whatevertogo-oh-my-kimicli-0.1.0.tgz
-dist/bun/whatevertogo-oh-my-kimicli-0.1.0.tgz
+dist/npm/whatevertogo-oh-my-kimicli-0.1.4.tgz
+dist/bun/whatevertogo-oh-my-kimicli-0.1.4.tgz
+dist/bin/omk.js
 dist/bundle/omk.js
 ```
 
-The package intentionally ships TypeScript sources plus `skills/`, `prompts/`, and `plugin/` directories because `omk setup` needs those resources to install managed KimiCLI files.
+The npm package `bin` points at `dist/bin/omk.js`, the Node.js runtime artifact for users. The repo still ships TypeScript sources plus `skills/`, `prompts/`, and `plugin/` directories because `omk setup` needs those resources to install managed KimiCLI files.
 
 ## Path Reference
 

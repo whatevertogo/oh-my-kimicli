@@ -1,11 +1,11 @@
 {
   "name": "@whatevertogo/oh-my-kimicli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Personal workflow orchestration for Kimi Code CLI: skills, hooks, persistent continuation, review gates, and usage insights.",
   "type": "module",
   "bin": {
-    "omk": "bin/omk.js",
-    "oh-my-kimicli": "bin/omk.js"
+    "omk": "dist/bin/omk.js",
+    "oh-my-kimicli": "dist/bin/omk.js"
   },
   "repository": {
     "type": "git",
@@ -28,30 +28,35 @@
     "insights"
   ],
   "files": [
-    "bin",
+    "bin/omk.ts",
+    "bin/omk-node.ts",
+    "dist/bin",
     "lib",
     "plugin",
     "prompts",
     "skills",
-    "test",
     "README.md",
     "README_EN.md",
     "LICENSE",
     "tsconfig.json"
   ],
   "scripts": {
-    "build:bun": "bun build bin/omk.ts --target=bun --outdir dist/bundle",
-    "check": "bun test && bun run typecheck",
-    "clean": "bun -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/npm', { recursive: true }); mkdirSync('dist/bun', { recursive: true });\"",
-    "pack:all": "bun run check && bun run clean && bun run pack:npm && bun run pack:bun && bun run build:bun",
+    "build": "bun build bin/omk-node.ts --target=node --outfile=dist/bin/omk.js",
+    "build:bun": "bun build bin/omk.ts --target=bun --outfile=dist/bundle/omk.js",
+    "check": "bun test && bun run typecheck && bun run build",
+    "clean": "node -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/npm', { recursive: true }); mkdirSync('dist/bun', { recursive: true }); mkdirSync('dist/bundle', { recursive: true });\"",
+    "dev": "bun run bin/omk.ts",
+    "pack:all": "bun run check && bun run clean && bun run build && bun run pack:npm && bun run pack:bun && bun run build:bun",
     "pack:bun": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/bun', { recursive: true });\" && bun pm pack --destination dist/bun",
-    "pack:npm": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/npm', { recursive: true });\" && npm pack --pack-destination dist/npm",
+    "pack:npm": "node -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/npm', { recursive: true });\" && npm pack --pack-destination dist/npm",
+    "prepack": "bun run build",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit"
   },
   "engines": {
-    "bun": ">=1.3.0"
+    "node": ">=20.19.0"
   },
+  "packageManager": "bun@1.3.9",
   "devDependencies": {
     "@types/bun": "^1.3.1",
     "@types/node": "^24.10.1",

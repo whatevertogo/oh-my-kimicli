@@ -1,10 +1,47 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-export const packageRoot = resolve(here, "..");
+export const packageRoot = findPackageRoot(resolve(here, ".."));
+
+function findPackageRoot(start: string) {
+  let current = start;
+  for (;;) {
+    if (
+      existsSync(join(current, "package.json")) &&
+      existsSync(join(current, "skills")) &&
+      existsSync(join(current, "prompts")) &&
+      existsSync(join(current, "plugin"))
+    ) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return start;
+    }
+    current = parent;
+  }
+}
+
+export function currentEntrypoint() {
+  const invoked = process.argv[1] ? resolve(process.argv[1]) : "";
+  if (invoked && existsSync(invoked) && /^omk(?:-node)?\.(?:js|ts)$/.test(basename(invoked))) {
+    return invoked;
+  }
+  for (const candidate of [
+    join(packageRoot, "dist", "bin", "omk.js"),
+    join(packageRoot, "bin", "omk.ts"),
+    join(packageRoot, "bin", "omk.js")
+  ]) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return join(packageRoot, "dist", "bin", "omk.js");
+}
 
 export function kimiShareDir(env = process.env) {
   return env.KIMI_SHARE_DIR ? resolve(env.KIMI_SHARE_DIR) : join(homedir(), ".kimi");

@@ -20,6 +20,7 @@ import {
   kimiConfigFile,
   kimiPluginInstallDir,
   kimiUserSkillsDir,
+  currentEntrypoint,
   omkConfigFile,
   omkDataDir,
   omkUsageDataDir,
@@ -274,7 +275,7 @@ function removeManagedSkills() {
 }
 
 function buildHooksBlock() {
-  const command = `${shellQuote(process.execPath)} ${shellQuote(join(packageRoot, "bin", "omk.ts"))} hook`;
+  const command = `${shellQuote(process.execPath)} ${shellQuote(currentEntrypoint())} hook`;
   const events = [
     "UserPromptSubmit",
     "Stop",
@@ -392,7 +393,7 @@ function commandLooksResolvable(command) {
 }
 
 function checkRuntimeHook() {
-  const result = spawnSync(process.execPath, [join(packageRoot, "bin", "omk.ts"), "hook"], {
+  const result = spawnSync(process.execPath, [currentEntrypoint(), "hook"], {
     input: JSON.stringify({
       session_id: "omk-doctor-runtime",
       hook_event_name: "PreToolUse",

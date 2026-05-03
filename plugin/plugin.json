@@ -22,8 +22,8 @@
     ],
     "commands": {
       "omk": {
-        "entry": "bin/omk.ts",
-        "runtime": "bun"
+        "entry": "dist/bin/omk.js",
+        "runtime": "node"
       }
     }
   },
