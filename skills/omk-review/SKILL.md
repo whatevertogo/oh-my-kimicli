@@ -1,11 +1,11 @@
 ---
 name: omk-review
-description: Perform focused code review after meaningful code, config, prompt, workflow, or documentation changes; before commit or PR; or whenever the user asks for review. Review the user-specified scope first, otherwise staged changes, working-tree changes, then branch diff. Cover security, correctness, tests, and architecture. Report real issues only and write the report under the current workspace .omk directory.
+description: Perform focused code review after meaningful code, config, prompt, workflow, or documentation changes; before commit or PR; or whenever the user asks for review. Uses parallel subagents for 4-perspective review (security, correctness, tests, architecture). Report real issues only and write the report under the current workspace .omk directory.
 ---
 
 # omk-review
 
-Review real risk, not style noise.
+Focused multi-perspective review. Surface genuine issues, not filler.
 
 Report path:
 
@@ -15,7 +15,23 @@ Report path:
 
 Create `./.omk/` if needed.
 
-## Target
+---
+
+## 1. Environment Detection
+
+Detect first:
+
+| Capability | With subagents | Without subagents |
+|---|---|---|
+| Review mode | Run 4 perspectives in parallel via subagents | Run 4 perspectives sequentially yourself |
+| Run tests | via bash | via bash |
+| Output file | `CODE_REVIEW_ISSUES.md` | `CODE_REVIEW_ISSUES.md` |
+
+If subagents are unavailable, apply each perspective one by one and label them clearly.
+
+---
+
+## 2. Target
 
 Resolve review target in order:
 
@@ -32,119 +48,200 @@ When the user did not specify a target, run:
 omk review-target
 ```
 
-Use the returned JSON as the review target. If it reports `"target": "none"`, ask the user what
-to review instead of inventing a scope.
+Use the returned JSON as the review target. If it reports `"target": "none"`, ask the user what to review instead of inventing a scope.
 
-## Context
+---
 
-Gather enough to know:
+## 3. Context Gathering
 
-- changed code or target content
-- stack and package files
-- lint/type/test config
-- 2-3 nearby unchanged files for local patterns
+Collect before reviewing:
 
-If the framework or rules are unfamiliar after this, say it needs human review instead of guessing.
+1. Changed files and diffs (`git diff main` or staged diff)
+2. Project stack (`package.json`, `pyproject.toml`, `go.mod`, `Gemfile`, etc.)
+3. Conventions/config (`tsconfig.json`, `.eslintrc`, `ruff.toml`, `.prettierrc`, `biome.json`, etc.)
+4. 2–3 unchanged files from the same module for local patterns
 
-## Perspectives
+**Exit condition**: You know the framework, active rules, and local coding patterns.
+If not, stop and ask the user.
 
-Apply all four perspectives. Use subagents in parallel only when available and useful; otherwise do them yourself.
+---
 
-### Security
+## 4. Apply 4 Review Perspectives
 
-Report only exploitable issues introduced or modified by the target.
+### 4.0 Subagent Prompt Template
 
-Check:
+When spawning subagents, each one receives a message in this structure:
 
-- untrusted input reaching SQL, shell, template, eval, filesystem, or network sinks
-- real hardcoded secrets
-- auth/authz bypass on actual paths
-- unsafe deserialization of external data
+```
+You are the [PERSPECTIVE] reviewer. Your job is to find REAL issues, not generate filler.
 
-Do not report generic validation advice or framework-mitigated issues.
+**Project context**
+- Stack: [e.g. Node 20, Express, PostgreSQL]
+- Active rules: [e.g. ESLint airbnb, strict TypeScript]
+- Local patterns: [e.g. all DB calls go through db/query.ts, errors bubble as Result<T>]
 
-### Correctness
+**Diff**
+[paste full diff here]
 
-Report realistic bugs:
+**Your scope**
+[paste the relevant "Check" and "Do NOT flag" lists from section 4.x below]
 
-- wrong output
-- crashes
-- async/null/error paths
-- resource leaks
-- misleading names that can cause misuse
-- off-by-one or precedence bugs
+**Output rules**
+- Burden of proof is on you. If unsure, omit or move to low-confidence.
+- For every issue: severity, file:line, what is wrong, why it's not a false positive, concrete fix.
+- If nothing found: say "No [perspective] issues found." This is a valid outcome.
+- Do not add generic best-practice advice unrelated to this diff.
+```
 
-Do not report pure style nits or harmless refactors.
+Each subagent's scope comes directly from its section below (4.1–4.4).
 
-### Tests
+### 4.1 Security
 
-Report missing or invalid coverage for changed behavior:
+**Scope**: Real exploitable vulnerabilities introduced by this diff.
 
-- changed branches without tests
-- tests that no longer cover the behavior
-- assertions that trivially pass
+**Only report if all are true**:
+1. The issue is introduced or modified in this diff
+2. A plausible attack path exists from input to impact
+3. Existing framework/middleware does not already mitigate it
 
-Record test run results. Do not ask for generic "more tests".
+**Check**:
+- Unsanitized input reaching SQL/shell/template/eval/filesystem/network sinks
+- Real hardcoded secrets
+- Auth/authz bypasses on actual paths
+- Unsafe deserialization of external data
 
-### Architecture
+**Do NOT flag**:
+- Browser-only JS "SQL injection"
+- Missing HTTPS when TLS is clearly upstream
+- XSS where templates auto-escape by default
+- Generic input-validation advice without a concrete path
+- Test-only issues unless they expose real credentials
 
-Report changed cross-layer inconsistencies:
+### 4.2 Correctness
 
-- frontend/backend contract mismatch
-- type/interface change not propagated
-- env var missing from examples/docs
-- public API change missing version/changelog note
+**Scope**: Correctness bugs, crashes, or misleading behavior.
 
-Do not report architectural preferences that match existing patterns.
+**Only report if**:
+- It can realistically produce wrong output or a crash, or
+- It materially misleads future maintainers
 
-## Confidence Filter
+**Check**:
+- Logic errors
+- Null/async error paths that can fail in production
+- Resource leaks with unclear lifetime
+- Misleading names that can cause misuse
+- Off-by-one / precedence bugs
 
-Keep an issue only if you would defend it as real in this codebase.
+**Do NOT flag**:
+- Pure style nits
+- Missing comments on obvious code
+- Refactors with no correctness impact
+- Small intentional duplication
+- Complexity appropriate to the task
 
-Separate:
+### 4.3 Tests
 
-- new issues caused by the target
-- pre-existing issues not touched by the target
-- low-confidence observations
+**Scope**: Missing or invalid coverage for changed behavior.
 
+**Check**:
+- Changed branches/conditions with no test
+- Existing tests no longer covering changed behavior
+- Assertions that trivially pass without testing real logic
+
+**Do NOT flag**:
+- Trivial config/constants/pass-throughs
+- Test style unless broken
+- Generic "add more tests"
+- Coverage targets without naming a missing branch
+
+**Also report**: test run results (pass / fail / skip).
+
+### 4.4 Architecture & Consistency
+
+**Scope**: Cross-layer inconsistencies introduced by this diff.
+
+**Check**:
+- Frontend/backend contract mismatches
+- Type/interface changes not propagated
+- New env vars missing from `.env.example` or docs
+- Public API changes missing version/changelog updates
+
+**Do NOT flag**:
+- Architectural preferences that match existing patterns
+- "Should be a separate service"
+- Pre-existing inconsistencies untouched by this diff
+
+---
+
+## 5. Aggregate
+
+Apply the confidence filter before reporting:
+
+> Would I confidently defend this as a real issue in this codebase?
+
+- If yes: keep it
+- If unsure: move to low-confidence appendix or drop
+
+Separate **new issues** from **pre-existing issues**.
 Only new issues belong in the main report.
 
-## Report
+---
 
-Write:
+## 6. Report Format
 
 ```markdown
 # Code Review - [target]
 
 ## Summary
-Files reviewed: X | New issues: Y (critical A, high B, medium C, low D) | Perspectives: 4/4
+Files reviewed: X | New issues: Y (Z critical, A high, B medium, C low) | Perspectives: 4/4
+
+---
 
 ## Security
 | Sev | Issue | File:Line | Attack path |
 |-----|-------|-----------|-------------|
-| ... | ... | ... | ... |
+| High | `req.query.id` passed unsanitized to `db.raw()` | src/users.js:45 | GET /users?id=1 OR 1=1 → full table read |
 
 *No security issues found.*
+
+---
 
 ## Correctness
 | Sev | Issue | File:Line | Consequence |
 |-----|-------|-----------|-------------|
+| Medium | `fetchUser()` has no catch and rejection escapes | src/api.js:88 | Unhandled rejection may crash Node ≥15 |
+
+---
 
 ## Tests
-Run results: ...
+**Run results**: X passed, Y failed, Z skipped
 
 | Sev | Untested scenario | Location |
 |-----|-------------------|----------|
+| Low | `applyDiscount()` lacks test for `amount < 0` | src/pricing.js:22 |
+
+---
 
 ## Architecture
 | Sev | Inconsistency | Files |
 |-----|---------------|-------|
+| High | Backend `UserDTO` added `role`; frontend type not updated | api/user.go:14, web/types.ts:8 |
+
+---
 
 ## Must Fix Before Merge
-Critical/High only. If empty, say clear to merge.
+*(Critical/High only. If empty, diff is clear to merge.)*
 
-## Pre-Existing Issues
+1. **[SEC-001]** `db.raw()` injection — `src/users.js:45`
+   - Impact: Full users table read
+   - Fix: Use parameterized query
+
+---
+
+## Pre-Existing Issues (not blocking)
 - ...
+
+---
 
 ## Low-Confidence Observations
 - ...
@@ -152,10 +249,26 @@ Critical/High only. If empty, say clear to merge.
 
 If no issues exist, say so clearly in each relevant section.
 
-## Completion
+---
+
+## 7. Special Cases
+
+- **Small diff**: still apply all 4 perspectives
+- **Unfamiliar framework**: say "needs human review", do not guess
+- **Test failures**: record them, do not auto-block review
+- **Perspective disagreement**: mark as "Needs Discussion"
+- **Large diff (>20 files)**: batch by module, spawn subagents per batch
+
+---
+
+## 8. Completion
 
 Before final response:
 
-- write `./.omk/CODE_REVIEW_ISSUES.md`
-- mention test results
-- mention remaining risk or human-review need
+- [ ] Context gathered
+- [ ] All 4 perspectives applied (parallel subagents if available)
+- [ ] Confidence filter applied
+- [ ] New vs pre-existing issues separated
+- [ ] `./.omk/CODE_REVIEW_ISSUES.md` written
+- [ ] Mention test results
+- [ ] Mention remaining risk or human-review need
