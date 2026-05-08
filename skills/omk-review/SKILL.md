@@ -26,6 +26,15 @@ Resolve review target in order:
 
 Do not broaden an explicit user target. If the target is ambiguous or missing, ask.
 
+When the user did not specify a target, run:
+
+```sh
+omk review-target
+```
+
+Use the returned JSON as the review target. If it reports `"target": "none"`, ask the user what
+to review instead of inventing a scope.
+
 ## Context
 
 Gather enough to know:
