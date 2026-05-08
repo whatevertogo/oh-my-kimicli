@@ -1,6 +1,6 @@
 {
-  "name": "oh-my-kimicli",
-  "version": "0.1.0",
-  "description": "Hook-first workflow orchestration for Kimi Code CLI.",
-  "tools": []
+	"name": "oh-my-kimicli",
+	"version": "0.1.0",
+	"description": "Hook-first workflow orchestration for Kimi Code CLI.",
+	"tools": []
 }

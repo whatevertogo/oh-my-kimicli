@@ -1,32 +1,35 @@
 {
-  "name": "oh-my-kimicli",
-  "version": "0.1.0",
-  "description": "External hook, skill, and plugin orchestration for Kimi Code CLI.",
-  "type": "module",
-  "bin": {
-    "omk": "./bin/omk.ts",
-    "oh-my-kimicli": "./bin/omk.ts"
-  },
-  "files": [
-    "bin",
-    "lib",
-    "plugin",
-    "prompts",
-    "skills",
-    "test",
-    "README.md"
-  ],
-  "scripts": {
-    "build:bun": "bun build bin/omk.ts --target=bun --outdir dist/bundle",
-    "check": "bun test",
-    "clean": "bun -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/npm', { recursive: true }); mkdirSync('dist/bun', { recursive: true });\"",
-    "pack:all": "bun run check && bun run clean && bun run pack:npm && bun run pack:bun && bun run build:bun",
-    "pack:bun": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/bun', { recursive: true });\" && bun pm pack --destination dist/bun",
-    "pack:npm": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/npm', { recursive: true });\" && npm pack --pack-destination dist/npm",
-    "test": "bun test"
-  },
-  "engines": {
-    "bun": ">=1.3.0"
-  },
-  "license": "MIT"
+	"name": "oh-my-kimicli",
+	"version": "0.1.0",
+	"description": "External hook, skill, and plugin orchestration for Kimi Code CLI.",
+	"type": "module",
+	"bin": {
+		"omk": "./bin/omk.ts",
+		"oh-my-kimicli": "./bin/omk.ts"
+	},
+	"files": [
+		"bin",
+		"lib",
+		"plugin",
+		"prompts",
+		"skills",
+		"test",
+		"README.md"
+	],
+	"scripts": {
+		"build:bun": "bun build bin/omk.ts --target=bun --outdir dist/bundle",
+		"check": "bun test",
+		"clean": "bun -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true }); mkdirSync('dist/npm', { recursive: true }); mkdirSync('dist/bun', { recursive: true });\"",
+		"pack:all": "bun run check && bun run clean && bun run pack:npm && bun run pack:bun && bun run build:bun",
+		"pack:bun": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/bun', { recursive: true });\" && bun pm pack --destination dist/bun",
+		"pack:npm": "bun -e \"import { mkdirSync } from 'node:fs'; mkdirSync('dist/npm', { recursive: true });\" && npm pack --pack-destination dist/npm",
+		"test": "bun test"
+	},
+	"engines": {
+		"bun": ">=1.3.0"
+	},
+	"license": "MIT",
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.14"
+	}
 }
